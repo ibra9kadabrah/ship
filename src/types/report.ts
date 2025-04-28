@@ -119,6 +119,26 @@ export interface BaseReport { // Exported
   rospTime?: string | null;
   rospLatitude?: number | null;
   rospLongitude?: number | null;
+  // Arrival Report Specific Fields (from DB)
+  eospDate?: string | null;
+  eospTime?: string | null;
+  eospLatitude?: number | null;
+  eospLongitude?: number | null;
+  eospCourse?: number | null;
+  estimatedBerthingDate?: string | null;
+  estimatedBerthingTime?: string | null;
+  // Berth Report Specific Fields (from DB)
+  berthDate?: string | null;
+  berthTime?: string | null;
+  berthLatitude?: number | null;
+  berthLongitude?: number | null;
+  cargoLoaded?: number | null;
+  cargoUnloaded?: number | null;
+  // cargoQuantity is already in BaseReportData/DepartureSpecificData
+  cargoOpsStartDate?: string | null;
+  cargoOpsStartTime?: string | null;
+  cargoOpsEndDate?: string | null;
+  cargoOpsEndTime?: string | null;
   // Timestamps
   createdAt: string;
   updatedAt: string;
@@ -179,19 +199,40 @@ export interface NoonSpecificData extends BaseReportData {
   rospLongitude?: number;
 }
 
-// Placeholder for Arrival Report Data
+// Arrival Report Data
 export interface ArrivalSpecificData extends BaseReportData {
   reportType: 'arrival';
-  // Add Arrival-specific fields here later
-  distanceSinceLastReport: number; // Example
-  // Calculated Distance fields moved to BaseReport
+  // EOSP Data (Mandatory for Arrival)
+  eospDate: string;
+  eospTime: string;
+  eospLatitude: number;
+  eospLongitude: number;
+  eospCourse: number;
+  // Distance Data (Mandatory for Arrival)
+  distanceSinceLastReport: number; 
+  harbourDistance: number; 
+  harbourTime: string; // Format HH:MM
+  // Estimated Berthing (Mandatory for Arrival)
+  estimatedBerthingDate: string;
+  estimatedBerthingTime: string;
 }
 
-// Placeholder for Berth Report Data
+// Berth Report Data
 export interface BerthSpecificData extends BaseReportData {
   reportType: 'berth';
-  // Add Berth-specific fields here later
-  distanceSinceLastReport?: number | null; // Add for type consistency, even if not used
+  // Navigation Data (Mandatory for Berth)
+  berthDate: string;
+  berthTime: string;
+  berthLatitude: number;
+  berthLongitude: number;
+  // Cargo Operations Data (Mandatory Times, Conditional Amounts)
+  cargoLoaded?: number; // Input if initial state was 'Empty'
+  cargoUnloaded?: number; // Input if initial state was 'Loaded'
+  cargoOpsStartDate: string;
+  cargoOpsStartTime: string;
+  cargoOpsEndDate: string;
+  cargoOpsEndTime: string;
+  // distanceSinceLastReport is not an input for Berth
 }
 
 // --- Union Types ---
@@ -216,4 +257,13 @@ export type Report = BaseReport & (
 export interface ReviewReportDTO {
   status: 'approved' | 'rejected';
   reviewComments?: string;
+}
+
+// Enhanced DTO for viewing a report with related context
+export type FullReportViewDTO = Report & { // Use type intersection instead of interface extends
+  vesselName: string;
+  captainName: string;
+  voyageCargoQuantity?: number | null;
+  voyageCargoType?: string | null;
+  voyageCargoStatus?: CargoStatus | null;
 }

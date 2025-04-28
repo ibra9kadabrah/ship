@@ -168,6 +168,28 @@ export function setupDatabase(): void {
       rospTime TEXT,
       rospLatitude REAL,
       rospLongitude REAL,
+
+      -- Arrival Report Specific Fields
+      eospDate TEXT,
+      eospTime TEXT,
+      eospLatitude REAL,
+      eospLongitude REAL,
+      eospCourse REAL,
+      estimatedBerthingDate TEXT,
+      estimatedBerthingTime TEXT,
+
+      -- Berth Report Specific Fields
+      berthDate TEXT,
+      berthTime TEXT,
+      berthLatitude REAL,
+      berthLongitude REAL,
+      cargoLoaded REAL,
+      cargoUnloaded REAL,
+      -- cargoQuantity REAL, -- Already exists
+      cargoOpsStartDate TEXT,
+      cargoOpsStartTime TEXT,
+      cargoOpsEndDate TEXT,
+      cargoOpsEndTime TEXT,
       
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,

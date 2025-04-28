@@ -4,7 +4,7 @@ import { ReportService } from '../services/report.service'; // Import the servic
 import { CreateReportDTO, ReviewReportDTO, ReportType } from '../types/report'; // Use new DTO union
 
 // Define possible report types for runtime validation
-const VALID_REPORT_TYPES: ReportType[] = ['departure', 'noon', 'arrival', 'berth'];
+const VALID_REPORT_TYPES: ReportType[] = ['departure', 'noon', 'arrival', 'berth']; // Ensure berth is included
 
 export const ReportController = {
   // Unified endpoint for submitting any report type (captain only)

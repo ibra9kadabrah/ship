@@ -225,8 +225,48 @@ export const ReportModel = {
     `);
     const report = stmt.get(vesselId) as Partial<Report> | undefined; // Corrected cast
     return report || null;
-  }
+  },
 
+  // Get the first report for a voyage (typically the departure report)
+  getFirstReportForVoyage(voyageId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE voyageId = ?
+      ORDER BY reportDate ASC, reportTime ASC, createdAt ASC
+      LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Partial<Report> | undefined;
+    return report || null;
+  },
+
+  // Helper to get all reports for a voyage (needed for getLatestReportForVoyageByType)
+  _getAllReportsForVoyage(voyageId: string): Partial<Report>[] {
+     const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE voyageId = ?
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC 
+    `);
+    return stmt.all(voyageId) as Partial<Report>[];
+  },
+
+  // Get the latest report of a specific type for a voyage
+  getLatestReportForVoyageByType(voyageId: string, reportType: ReportType): Partial<Report> | null {
+    const reports = this._getAllReportsForVoyage(voyageId);
+    const filteredReports = reports.filter(report => report.reportType === reportType);
+    // The sorting is already newest first from _getAllReportsForVoyage
+    return filteredReports[0] || null; 
+  },
+
+  // Check if a captain has pending reports for a specific voyage
+  hasPendingReportsForVoyage(captainId: string, voyageId: string): boolean {
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM reports
+      WHERE captainId = ? AND voyageId = ? AND status = 'pending'
+    `);
+    const result = stmt.get(captainId, voyageId) as { count: number };
+    return result.count > 0;
+  }
 };
 
 export default ReportModel;

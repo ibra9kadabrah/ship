@@ -6,18 +6,23 @@ import {
     NoonSpecificData,
     ArrivalSpecificData,
     BerthSpecificData,
-    PassageState // Import PassageState
+    PassageState, // Import PassageState
+    CargoStatus, // Import CargoStatus
+    Report // Import Report type
 } from '../types/report';
 
 /**
  * Validates the input data for a report based on its type and the previous report's state.
  * Throws an error if validation fails.
  * @param reportInput The report data DTO.
- * @param previousPassageState The passageState of the previous report for this voyage.
+ * @param previousReport The previous report object (partial) for context (e.g., passage state).
+ * @param initialCargoStatus The cargo status from the voyage's departure report.
  */
-export function validateReportInput(reportInput: CreateReportDTO, previousPassageState?: PassageState | null): void {
-    // Remove the warning as we implement more types
-    // console.warn(`Validation logic in validateReportInput for type ${reportInput.reportType} is not fully implemented.`);
+export function validateReportInput(
+    reportInput: CreateReportDTO, 
+    previousReport?: Partial<Report> | null, 
+    initialCargoStatus: CargoStatus | null = null // Add default null
+): void {
 
     // Example structure:
     switch (reportInput.reportType) {
@@ -25,13 +30,13 @@ export function validateReportInput(reportInput: CreateReportDTO, previousPassag
             validateDepartureReport(reportInput);
             break;
         case 'noon':
-            validateNoonReport(reportInput, previousPassageState); // Pass previous state
+            validateNoonReport(reportInput, previousReport?.passageState as PassageState | null); // Cast to PassageState
             break;
         case 'arrival':
-            // validateArrivalReport(reportInput, previousPassageState); // Placeholder for future
+            validateArrivalReport(reportInput);
             break;
         case 'berth':
-            // validateBerthReport(reportInput);
+            validateBerthReport(reportInput, initialCargoStatus); // Pass initial cargo status
             break;
         default:
             // This should ideally be caught by the type system, but good practice
@@ -142,10 +147,118 @@ function validateNoonReport(reportInput: NoonSpecificData, previousPassageState?
     validateMachineryInput(reportInput);
 }
 
-// TODO: Implement validateArrivalReport, validateBerthReport
+function validateArrivalReport(reportInput: ArrivalSpecificData): void {
+    // 1. Validate mandatory Arrival-specific fields
+    const requiredFields: Array<keyof ArrivalSpecificData> = [
+        // Base fields are already checked by TS/BaseReportData type
+        // Arrival Specific fields:
+        'eospDate', 'eospTime', 'eospLatitude', 'eospLongitude', 'eospCourse',
+        'distanceSinceLastReport', 'harbourDistance', 'harbourTime',
+        'estimatedBerthingDate', 'estimatedBerthingTime'
+    ];
+
+    for (const field of requiredFields) {
+        const value = reportInput[field];
+        if (value === undefined || value === null || value === '') {
+             // Allow 0 for numeric fields like distance/course
+             if (typeof value === 'number' && value === 0) {
+                 continue; 
+             }
+            throw new Error(`Missing mandatory field for arrival report: ${field}`);
+        }
+    }
+
+    // 2. Specific format/range checks
+    if (reportInput.distanceSinceLastReport < 0) {
+        throw new Error(`Invalid distanceSinceLastReport: ${reportInput.distanceSinceLastReport}. Must be >= 0.`);
+    }
+    if (reportInput.harbourDistance < 0) {
+        throw new Error(`Invalid harbourDistance: ${reportInput.harbourDistance}. Must be >= 0.`);
+    }
+    // Basic HH:MM check for harbourTime
+    if (!/^\d{2}:\d{2}$/.test(reportInput.harbourTime)) {
+        throw new Error(`Invalid harbourTime format: ${reportInput.harbourTime}. Must be HH:MM.`);
+    }
+    // Add lat/lon/course range checks if needed
+
+    // 3. Validate common BaseReportData fields (ranges, etc.)
+    if (reportInput.windForce < 0 || reportInput.windForce > 12) {
+         throw new Error(`Invalid windForce value: ${reportInput.windForce}. Must be between 0 and 12.`);
+    }
+     if (reportInput.seaState < 0 || reportInput.seaState > 9) {
+         throw new Error(`Invalid seaState value: ${reportInput.seaState}. Must be between 0 and 9.`);
+    }
+     if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { 
+         throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
+    }
+    // Add more checks for other BaseReportData fields if necessary
+
+    // 4. Validate Machinery (assuming mandatory for Arrival)
+    // Machinery validation might not apply to Berth reports, or might be optional.
+    // Let's assume it's still required for now based on previous patterns.
+    // If not, this call can be moved into the specific validators where needed.
+    // FIX: Remove invalid comparison - reportInput.reportType is already 'arrival' here
+    validateMachineryInput(reportInput);
+}
+
+function validateBerthReport(reportInput: BerthSpecificData, initialCargoStatus: CargoStatus | null): void {
+    // 1. Validate mandatory Berth Navigation fields
+    const navFields: Array<keyof BerthSpecificData> = ['berthDate', 'berthTime', 'berthLatitude', 'berthLongitude'];
+    for (const field of navFields) {
+        if (reportInput[field] === undefined || reportInput[field] === null || reportInput[field] === '') {
+            throw new Error(`Missing mandatory field for berth report: ${field}`);
+        }
+    }
+    // Add lat/lon range checks if needed
+
+    // 2. Validate mandatory Cargo Ops Time fields
+    const timeFields: Array<keyof BerthSpecificData> = ['cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime'];
+     for (const field of timeFields) {
+        if (!reportInput[field]) { // Check for empty string, null, undefined
+            throw new Error(`Missing mandatory cargo operations time field for berth report: ${field}`);
+        }
+    }
+
+    // 3. Validate Conditional Cargo Amount Input
+    if (!initialCargoStatus) {
+         throw new Error("Cannot validate berth report without knowing the initial cargo status from departure.");
+    }
+    if (initialCargoStatus === 'Loaded') {
+        if (reportInput.cargoUnloaded === undefined || reportInput.cargoUnloaded === null || reportInput.cargoUnloaded < 0) {
+             throw new Error(`Missing or invalid 'cargoUnloaded' field for berth report (required when initial status was 'Loaded'). Must be >= 0.`);
+        }
+        if (reportInput.cargoLoaded !== undefined && reportInput.cargoLoaded !== null && reportInput.cargoLoaded !== 0) {
+             throw new Error(`Invalid 'cargoLoaded' field for berth report. Should not be provided or must be 0 when initial status was 'Loaded'.`);
+        }
+    } else if (initialCargoStatus === 'Empty') {
+         if (reportInput.cargoLoaded === undefined || reportInput.cargoLoaded === null || reportInput.cargoLoaded < 0) {
+             throw new Error(`Missing or invalid 'cargoLoaded' field for berth report (required when initial status was 'Empty'). Must be >= 0.`);
+        }
+         if (reportInput.cargoUnloaded !== undefined && reportInput.cargoUnloaded !== null && reportInput.cargoUnloaded !== 0) {
+             throw new Error(`Invalid 'cargoUnloaded' field for berth report. Should not be provided or must be 0 when initial status was 'Empty'.`);
+        }
+    }
+
+     // 4. Validate common BaseReportData fields (weather might be optional/irrelevant at berth?)
+     // Re-evaluate which base fields are truly mandatory for a Berth report.
+     // For now, keep weather checks as an example, but they might need removal/adjustment.
+     if (reportInput.windForce < 0 || reportInput.windForce > 12) {
+          throw new Error(`Invalid windForce value: ${reportInput.windForce}. Must be between 0 and 12.`);
+     }
+      if (reportInput.seaState < 0 || reportInput.seaState > 9) {
+          throw new Error(`Invalid seaState value: ${reportInput.seaState}. Must be between 0 and 9.`);
+     }
+      if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { 
+          throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
+     }
+     // Consumption/Supply/Machinery might also be optional or have different rules at berth.
+     // Assuming machinery is NOT required for Berth for now.
+     // validateMachineryInput(reportInput); 
+}
+
 
 function validateMachineryInput(reportInput: CreateReportDTO): void {
-     // Machinery Validation (Common to applicable reports like Departure, Noon)
+     // Machinery Validation (Common to applicable reports like Departure, Noon, Arrival)
      const requiredUnits = [1, 2, 3, 4, 5, 6];
      const providedUnitNumbers = reportInput.engineUnits?.map(u => u.unitNumber) ?? [];
      if (!requiredUnits.every(num => providedUnitNumbers.includes(num))) {
