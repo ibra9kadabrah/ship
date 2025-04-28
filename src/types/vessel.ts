@@ -5,6 +5,12 @@ export interface Vessel {
     imoNumber: string;
     deadweight: number;
     captainId: string;
+    // Initial ROBs
+    initialRobLsifo?: number;
+    initialRobLsmgo?: number;
+    initialRobCylOil?: number;
+    initialRobMeOil?: number;
+    initialRobAeOil?: number;
     createdAt: Date;
     updatedAt: Date;
     isActive: boolean;

@@ -5,7 +5,7 @@ admin_login() {
   ADMIN_RESPONSE=$(curl -s -X POST http://localhost:3000/api/auth/login \
     -H "Content-Type: application/json" \
     -d '{
-      "username": "admin1",
+      "username": "admin",
       "password": "password"
     }')
   echo "$ADMIN_RESPONSE" | grep -q "token" && {
@@ -61,7 +61,7 @@ user_login() {
   
   case $ROLE in
     admin)
-      USERNAME="admin1"
+      USERNAME="admin"
       ;;
     captain)
       USERNAME="captain1"
@@ -105,4 +105,3 @@ user_login() {
     echo "Login failed: $LOGIN_RESPONSE"
   }
 }
-

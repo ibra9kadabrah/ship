@@ -5,6 +5,9 @@ export interface Voyage {
   id: string;
   vesselId: string;
   voyageNumber: string;
+  departurePort: string; // Added based on DB schema
+  destinationPort: string; // Added based on DB schema
+  voyageDistance: number; // Added based on DB schema
   startDate: string;
   endDate?: string;
   status: VoyageStatus;
