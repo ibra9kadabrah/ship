@@ -1,133 +1,128 @@
 // src/controllers/report.controller.ts
 import { Request, Response } from 'express';
-import ReportModel from '../models/report.model';
-import VesselModel from '../models/vessel.model';
-import { CreateDepartureReportDTO, ReviewReportDTO } from '../types/report';
+import { ReportService } from '../services/report.service'; // Import the service
+import { CreateReportDTO, ReviewReportDTO, ReportType } from '../types/report'; // Use new DTO union
+
+// Define possible report types for runtime validation
+const VALID_REPORT_TYPES: ReportType[] = ['departure', 'noon', 'arrival', 'berth'];
 
 export const ReportController = {
-  // Submit a departure report (captain only)
-  submitDepartureReport(req: Request, res: Response): void {
+  // Unified endpoint for submitting any report type (captain only)
+  // Note: Route needs to be updated to handle different types, e.g., POST /api/reports
+  async submitReport(req: Request, res: Response): Promise<void> {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
+      if (req.user.role !== 'captain') {
+         res.status(403).json({ error: 'Only captains can submit reports' });
+         return;
+      }
       
-      const reportData: CreateDepartureReportDTO = req.body;
+      // TODO: Add more robust validation (e.g., using a library like Zod)
+      const reportData: CreateReportDTO = req.body; 
       const captainId = req.user.id;
-      
-      // Validate vessel exists
-      const vessel = VesselModel.findById(reportData.vesselId);
-      if (!vessel) {
-        res.status(404).json({ error: 'Vessel not found' });
-        return;
+
+      // Basic validation moved here or could be in service
+      // Use the runtime constant array for validation
+      if (!reportData.reportType || !VALID_REPORT_TYPES.includes(reportData.reportType)) {
+         res.status(400).json({ error: `Valid reportType (${VALID_REPORT_TYPES.join(', ')}) is required` });
+         return;
       }
-      
-      // Verify captain is assigned to this vessel
-      if (vessel.captainId !== captainId) {
-        res.status(403).json({ error: 'You are not assigned to this vessel' });
-        return;
+       // Add checks for required fields based on reportType if needed before calling service
+
+      const newReport = await ReportService.submitReport(reportData, captainId);
+      res.status(201).json(newReport);
+
+    } catch (error: any) { 
+      console.error('Error submitting report:', error);
+      // Handle specific errors thrown by the service
+      if (error.message.includes("not found")) {
+         res.status(404).json({ error: error.message });
+      } else if (error.message.includes("required for the first report")) {
+         res.status(400).json({ error: error.message });
+      } else if (error.message.includes("pending reports")) { // Example check
+         res.status(400).json({ error: error.message });
       }
-      
-      // Check if captain has pending reports for this vessel
-      if (ReportModel.hasPendingReports(captainId, reportData.vesselId)) {
-        res.status(400).json({ error: 'You have pending reports for this vessel. Wait for approval before submitting a new report.' });
-        return;
-      }
-      
-      // Create the departure report
-      const report = ReportModel.createDepartureReport(reportData, captainId);
-      
-      res.status(201).json(report);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Error submitting departure report:', error);
-        res.status(500).json({ error: `Failed to submit departure report: ${error.message}` });
-      } else {
-        console.error('Unknown error submitting departure report:', error);
-        res.status(500).json({ error: 'Failed to submit departure report: unknown error' });
+      else {
+         res.status(500).json({ error: 'Failed to submit report' });
       }
     }
   },
   
   // Get pending reports (admin/office only)
-  getPendingReports(req: Request, res: Response): void {
+  async getPendingReports(req: Request, res: Response): Promise<void> {
     try {
-      const reports = ReportModel.getPendingReports();
-      res.status(200).json(reports);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Error fetching pending reports:', error);
-        res.status(500).json({ error: `Failed to fetch pending reports: ${error.message}` });
-      } else {
-        console.error('Unknown error fetching pending reports:', error);
-        res.status(500).json({ error: 'Failed to fetch pending reports: unknown error' });
+      // Authorization check could also be middleware
+      if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'office')) {
+         res.status(403).json({ error: 'Admin or office access required' });
+         return;
       }
+      const reports = await ReportService.getPendingReports();
+      res.status(200).json(reports);
+    } catch (error: any) {
+      console.error('Error fetching pending reports:', error);
+      res.status(500).json({ error: 'Failed to fetch pending reports' });
     }
   },
 
-  // Get report by ID
-  getReportById(req: Request, res: Response): void {
+  // Get report by ID (admin/office only)
+  async getReportById(req: Request, res: Response): Promise<void> {
     try {
+       // Authorization check
+       if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'office')) {
+         res.status(403).json({ error: 'Admin or office access required' });
+         return;
+       }
       const { id } = req.params;
-      const report = ReportModel.findById(id);
-      
-      if (!report) {
-        res.status(404).json({ error: 'Report not found' });
-        return;
-      }
-      
+      const report = await ReportService.getReportById(id);
       res.status(200).json(report);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
+    } catch (error: any) {
         console.error('Error fetching report:', error);
-        res.status(500).json({ error: `Failed to fetch report: ${error.message}` });
-      } else {
-        console.error('Unknown error fetching report:', error);
-        res.status(500).json({ error: 'Failed to fetch report: unknown error' });
-      }
+        if (error.message.includes("not found")) {
+           res.status(404).json({ error: error.message });
+        } else {
+           res.status(500).json({ error: 'Failed to fetch report' });
+        }
     }
   },
   
   // Review report (approve/reject) (admin/office only)
-  reviewReport(req: Request, res: Response): void {
+  async reviewReport(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
+      if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'office')) {
+         res.status(403).json({ error: 'Admin or office access required' });
+         return;
       }
       
       const { id } = req.params;
       const reviewData: ReviewReportDTO = req.body;
       const reviewerId = req.user.id;
-      
-      // Validate report exists
-      const existingReport = ReportModel.findById(id);
-      if (!existingReport) {
-        res.status(404).json({ error: 'Report not found' });
-        return;
+
+      // Basic validation
+      if (!reviewData.status || (reviewData.status !== 'approved' && reviewData.status !== 'rejected')) {
+          res.status(400).json({ error: "Invalid status provided. Must be 'approved' or 'rejected'." });
+          return;
       }
       
-      // Check if report is already reviewed
-      if (existingReport.status !== 'pending') {
-        res.status(400).json({ error: 'Report has already been reviewed' });
-        return;
-      }
-      
-      // Update the report
-      const updatedReport = ReportModel.reviewReport(id, reviewData, reviewerId);
-      
+      const updatedReport = await ReportService.reviewReport(id, reviewData, reviewerId);
       res.status(200).json(updatedReport);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Error reviewing report:', error);
-        res.status(500).json({ error: `Failed to review report: ${error.message}` });
-      } else {
-        console.error('Unknown error reviewing report:', error);
-        res.status(500).json({ error: 'Failed to review report: unknown error' });
-      }
+
+    } catch (error: any) {
+      console.error('Error reviewing report:', error);
+       if (error.message.includes("not found")) {
+           res.status(404).json({ error: error.message });
+       } else if (error.message.includes("already been reviewed")) { // Example check
+           res.status(400).json({ error: error.message });
+       }
+       else {
+           res.status(500).json({ error: 'Failed to review report' });
+       }
     }
   }
 };
 
+// Note: We might need to export ReportType if used directly in controller validation
+// export { ReportType }; 
 export default ReportController;

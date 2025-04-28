@@ -6,7 +6,8 @@ import { authenticate, authorizeAdmin, authorizeOffice, authorizeCaptain } from 
 const router = Router();
 
 // Captain routes
-router.post('/departure', authenticate, authorizeCaptain, ReportController.submitDepartureReport);
+// Changed from /departure to / and using the unified submitReport method
+router.post('/', authenticate, authorizeCaptain, ReportController.submitReport); 
 
 // Office/admin routes
 router.get('/pending', authenticate, authorizeOffice, ReportController.getPendingReports);

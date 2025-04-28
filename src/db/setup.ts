@@ -69,9 +69,9 @@ export function setupDatabase(): void {
       reviewComments TEXT,
       
       -- General information
-      reportDate TEXT NOT NULL,
-      reportTime TEXT NOT NULL,
-      timeZone TEXT NOT NULL,
+      reportDate TEXT NOT NULL, -- Already NOT NULL
+      reportTime TEXT NOT NULL, -- Already NOT NULL
+      timeZone TEXT NOT NULL, -- Already NOT NULL
       
       -- Voyage data 
       departurePort TEXT,
@@ -153,6 +153,21 @@ export function setupDatabase(): void {
       meTcExhaustTempOut REAL,
       meThrustBearingTemp REAL,
       meDailyRunHours REAL,
+
+      -- Noon Report Specific Fields
+      passageState TEXT CHECK(passageState IN ('NOON', 'SOSP', 'ROSP')),
+      noonDate TEXT,
+      noonTime TEXT,
+      noonLatitude REAL,
+      noonLongitude REAL,
+      sospDate TEXT,
+      sospTime TEXT,
+      sospLatitude REAL,
+      sospLongitude REAL,
+      rospDate TEXT,
+      rospTime TEXT,
+      rospLatitude REAL,
+      rospLongitude REAL,
       
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
