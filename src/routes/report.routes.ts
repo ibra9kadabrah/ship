@@ -12,6 +12,6 @@ router.post('/', authenticate, authorizeCaptain, ReportController.submitReport);
 // Office/admin routes
 router.get('/pending', authenticate, authorizeOffice, ReportController.getPendingReports);
 router.get('/:id', authenticate, authorizeOffice, ReportController.getReportById);
-router.put('/:id/review', authenticate, authorizeOffice, ReportController.reviewReport);
+router.patch('/:id/review', authenticate, authorizeOffice, ReportController.reviewReport); // Changed PUT to PATCH
 
 export default router;

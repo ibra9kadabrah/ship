@@ -141,6 +141,13 @@ export function setupDatabase(): void {
       currentRobMeOil REAL,
       currentRobAeOil REAL,
 
+      -- Bunker Data: Initial ROB Inputs (only relevant for first departure report)
+      initialRobLsifo REAL NULL,
+      initialRobLsmgo REAL NULL,
+      initialRobCylOil REAL NULL,
+      initialRobMeOil REAL NULL,
+      initialRobAeOil REAL NULL,
+
       -- Machinery Data: Main Engine Parameters (optional)
       meFoPressure REAL,
       meLubOilPressure REAL,

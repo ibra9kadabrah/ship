@@ -254,7 +254,19 @@ export const ReportModel = {
     const reports = this._getAllReportsForVoyage(voyageId);
     const filteredReports = reports.filter(report => report.reportType === reportType);
     // The sorting is already newest first from _getAllReportsForVoyage
-    return filteredReports[0] || null; 
+    return filteredReports[0] || null;
+  },
+
+  // Get the latest APPROVED report for a voyage
+  getLatestApprovedReportForVoyage(voyageId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE voyageId = ? AND status = 'approved'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+      LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Partial<Report> | undefined;
+    return report || null;
   },
 
   // Check if a captain has pending reports for a specific voyage

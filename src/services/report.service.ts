@@ -231,8 +231,18 @@ export const ReportService = {
             }
         }
 
+        // Add initial ROBs to the record data if it's the first departure report
+        const initialRobFieldsForRecord = (isFirstReportForVessel && reportInput.reportType === 'departure') 
+            ? { 
+                initialRobLsifo: reportInput.initialRobLsifo,
+                initialRobLsmgo: reportInput.initialRobLsmgo,
+                initialRobCylOil: reportInput.initialRobCylOil,
+                initialRobMeOil: reportInput.initialRobMeOil,
+                initialRobAeOil: reportInput.initialRobAeOil,
+              } 
+            : {};
 
-        const reportRecordData: ReportRecordData = {
+        const reportRecordData: ReportRecordData & typeof initialRobFieldsForRecord = {
             id: reportId, voyageId: voyage.id, vesselId: reportInput.vesselId, reportType: reportInput.reportType,
             status: 'pending', captainId: captainId, reviewerId: null, reviewDate: null, reviewComments: null,
             reportDate: reportInput.reportDate, reportTime: reportInput.reportTime, timeZone: reportInput.timeZone,
@@ -336,15 +346,13 @@ export const ReportService = {
              cargoOpsStartTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsStartTime : null,
              cargoOpsEndDate: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndDate : null,
              cargoOpsEndTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndTime : null,
+             // Add the initial ROB fields (will be undefined/null if not applicable)
+             ...initialRobFieldsForRecord 
         };
 
         // --- 7. Execute Transaction ---
+        // REMOVED: VesselModel.updateInitialRob call - This will now happen on approval
         const transaction = db.transaction(() => {
-            if (initialRobDataToSave) {
-                if (!VesselModel.updateInitialRob(vessel.id, initialRobDataToSave)) {
-                    throw new Error("Failed to update initial ROB on vessel record.");
-                }
-            }
             ReportModel._createReportRecord(reportRecordData); // Insert main report
 
             if (reportInput.engineUnits?.length) { // Insert units
@@ -417,15 +425,90 @@ export const ReportService = {
         return fullReport as FullReportViewDTO; 
     },
 
-    async reviewReport(id: string, reviewData: ReviewReportDTO, reviewerId: string): Promise<FullReportViewDTO> { // Update return type
-        const existingReport = ReportModel.findById(id); // Check basic existence first
-        if (!existingReport) throw new Error(`Report with ID ${id} not found.`);
-        if (existingReport.status !== 'pending') throw new Error(`Report ${id} has already been reviewed (status: ${existingReport.status}).`);
+    // Define InitialRobData interface locally if not imported
+    // interface InitialRobData {
+    //   initialRobLsifo?: number | null;
+    //   initialRobLsmgo?: number | null;
+    //   initialRobCylOil?: number | null;
+    //   initialRobMeOil?: number | null;
+    //   initialRobAeOil?: number | null;
+    // }
 
-        const success = ReportModel.reviewReport(id, reviewData, reviewerId);
-        if (!success) throw new Error(`Failed to review report ${id}.`);
+    async reviewReport(id: string, reviewData: ReviewReportDTO, reviewerId: string): Promise<FullReportViewDTO> {
         
-        return this.getReportById(id);
+        const reviewTransaction = db.transaction(() => {
+            // 1. Fetch the report being reviewed *within the transaction*
+            const reportToReview = ReportModel.findById(id); 
+            if (!reportToReview) {
+                throw new Error(`Report with ID ${id} not found.`);
+            }
+            // 2. Check current status *within the transaction*
+            if (reportToReview.status !== 'pending') {
+                throw new Error(`Report ${id} has already been reviewed (status: ${reportToReview.status}).`);
+            }
+
+            // 3. Check if approving the first-ever departure report
+            let robUpdateSuccess = true; // Assume success unless update is needed and fails
+            if (reviewData.status === 'approved' && reportToReview.reportType === 'departure') {
+                const vessel = VesselModel.findById(reportToReview.vesselId as string);
+                if (!vessel) {
+                    throw new Error(`Associated vessel ${reportToReview.vesselId} not found for report ${id}.`);
+                }
+                // Check if vessel's initial ROBs are still null
+                if (vessel.initialRobLsifo === null) { 
+                    console.log(`Approving the first departure report (${id}) for vessel ${vessel.id}. Updating initial ROBs.`);
+                    
+                    // Extract initial ROBs from the report data
+                    // Extract initial ROBs from the report data fetched from the DB
+                    // ReportModel.findById now selects these new columns
+                    const initialRobData = {
+                        initialRobLsifo: reportToReview.initialRobLsifo, 
+                        initialRobLsmgo: reportToReview.initialRobLsmgo,
+                        initialRobCylOil: reportToReview.initialRobCylOil,
+                        initialRobMeOil: reportToReview.initialRobMeOil,
+                        initialRobAeOil: reportToReview.initialRobAeOil,
+                    };
+                    // Filter out any null/undefined values
+                    const validInitialRobData = Object.fromEntries(
+                         Object.entries(initialRobData).filter(([_, v]) => v !== null && v !== undefined)
+                    );
+
+                    if (Object.keys(validInitialRobData).length > 0) {
+                         robUpdateSuccess = VesselModel.updateInitialRob(vessel.id, validInitialRobData);
+                         if (!robUpdateSuccess) {
+                             // Error will be thrown after transaction attempt
+                             console.error(`Failed to update initial ROB for vessel ${vessel.id} while approving report ${id}.`);
+                         }
+                    } else {
+                         console.warn(`First departure report ${id} approved, but no initial ROB data found in the report record to update vessel ${vessel.id}.`);
+                    }
+                }
+            }
+
+            // 4. Update the report status itself
+            const statusUpdateSuccess = ReportModel.reviewReport(id, reviewData, reviewerId);
+
+            // 5. Check results and throw if necessary to rollback transaction
+            if (!robUpdateSuccess) {
+                 throw new Error(`Failed to update initial ROB for vessel ${reportToReview.vesselId}.`);
+            }
+             if (!statusUpdateSuccess) {
+                 // This case should ideally be covered by the initial status check, but as a safeguard:
+                 throw new Error(`Failed to update report status for ${id}.`);
+             }
+
+        }); // End of transaction definition
+
+        // Execute the transaction
+        try {
+            reviewTransaction();
+            // If transaction succeeded, fetch and return the updated report view
+            return this.getReportById(id);
+        } catch (error) {
+            console.error(`Report review transaction failed for report ${id}:`, error);
+            // Re-throw the error to be handled by the controller
+            throw error; 
+        }
     },
 
     async getPendingReports(): Promise<Report[]> {

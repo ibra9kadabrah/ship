@@ -43,8 +43,8 @@ export function validateReportInput(
             throw new Error(`Invalid report type provided: ${(reportInput as any)?.reportType}`);
     }
 
-    // Common validations (e.g., machinery) can go here or within specific validators
-    validateMachineryInput(reportInput); 
+    // REMOVED: Common machinery validation call from here. It will be called within specific validators.
+    // validateMachineryInput(reportInput); 
 }
 
 // --- Helper Validation Functions ---
@@ -87,6 +87,8 @@ function validateDepartureReport(reportInput: DepartureSpecificData): void {
      if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { // Assuming 0-9 meter range
          throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
     }
+    // Validate Machinery for Departure
+    validateMachineryInput(reportInput);
 }
 
 // --- Specific Report Validators ---
@@ -143,7 +145,7 @@ function validateNoonReport(reportInput: NoonSpecificData, previousPassageState?
     }
     // Add more checks for other BaseReportData fields if necessary
 
-    // 5. Validate Machinery (assuming mandatory for Noon)
+    // 5. Validate Machinery for Noon
     validateMachineryInput(reportInput);
 }
 
@@ -197,7 +199,7 @@ function validateArrivalReport(reportInput: ArrivalSpecificData): void {
     // Machinery validation might not apply to Berth reports, or might be optional.
     // Let's assume it's still required for now based on previous patterns.
     // If not, this call can be moved into the specific validators where needed.
-    // FIX: Remove invalid comparison - reportInput.reportType is already 'arrival' here
+    // 4. Validate Machinery for Arrival
     validateMachineryInput(reportInput);
 }
 

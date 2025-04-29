@@ -139,6 +139,12 @@ export interface BaseReport { // Exported
   cargoOpsStartTime?: string | null;
   cargoOpsEndDate?: string | null;
   cargoOpsEndTime?: string | null;
+  // Bunker Data: Initial ROB Inputs (present on first departure report record)
+  initialRobLsifo?: number | null;
+  initialRobLsmgo?: number | null;
+  initialRobCylOil?: number | null;
+  initialRobMeOil?: number | null;
+  initialRobAeOil?: number | null;
   // Timestamps
   createdAt: string;
   updatedAt: string;
