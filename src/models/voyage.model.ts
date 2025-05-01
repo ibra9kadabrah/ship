@@ -80,6 +80,19 @@ export const VoyageModel = {
     
     const result = stmt.get(vesselId) as { voyageNumber: string } | undefined;
     return result ? result.voyageNumber : null;
+  },
+
+  // Find the latest completed voyage for a specific vessel
+  findLatestCompletedByVesselId(vesselId: string): Voyage | null {
+    const stmt = db.prepare(`
+      SELECT * 
+      FROM voyages 
+      WHERE vesselId = ? AND status = 'completed' 
+      ORDER BY createdAt DESC 
+      LIMIT 1
+    `);
+    const voyage = stmt.get(vesselId) as Voyage | undefined;
+    return voyage || null;
   }
 };
 

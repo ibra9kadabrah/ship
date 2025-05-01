@@ -22,3 +22,12 @@ export interface CreateVoyageDTO {
     voyageDistance: number;   
     startDate: string;
   }
+
+// Represents the logical state of the voyage based on the latest report
+export type VoyageState = 
+  | 'NO_VOYAGE_ACTIVE' // Ready for Departure
+  | 'DEPARTED'         // After Departure, before first Noon/Arrival
+  | 'AT_SEA'           // After first Noon, before Arrival
+  | 'ARRIVED'          // After Arrival, before first Berth
+  | 'BERTHED'          // After first Berth, before next Departure
+  | 'REPORT_PENDING';  // If the latest report is pending review

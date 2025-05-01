@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import reportRoutes from './routes/report.routes';
+import voyageRoutes from './routes/voyage.routes'; // Add import for voyage routes
 
 
 import vesselRoutes from './routes/vessel.routes';
@@ -26,6 +27,7 @@ app.use(express.json());
 app.use('/api/vessels', vesselRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/voyages', voyageRoutes); // Mount voyage routes
 
 
 // Admin URL handler

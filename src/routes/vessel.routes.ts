@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import VesselController from '../controllers/vessel.controller';
-import { authenticate, authorizeAdmin, authorizeOffice } from '../middlewares/auth.middleware';
+import { authenticate, authorizeAdmin, authorizeOffice, authorizeCaptain } from '../middlewares/auth.middleware'; // Added authorizeCaptain
 
 const router = Router();
 
@@ -12,6 +12,7 @@ router.delete('/:id', authenticate, authorizeAdmin, VesselController.deleteVesse
 // Office and admin routes (read)
 router.get('/', authenticate, authorizeOffice, VesselController.getAllVessels);
 router.get('/search', authenticate, authorizeOffice, VesselController.searchVessels);
+router.get('/my-vessel', authenticate, authorizeCaptain, VesselController.getMyVessel); // Added route for captain's vessel
 router.get('/:id', authenticate, authorizeOffice, VesselController.getVesselById);
 
 export default router;

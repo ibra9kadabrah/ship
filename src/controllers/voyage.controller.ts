@@ -1,0 +1,84 @@
+import { Request, Response, NextFunction } from 'express';
+// Use default imports for the models
+import VesselModel from '../models/vessel.model';
+import VoyageModel from '../models/voyage.model';
+import ReportModel from '../models/report.model';
+import VoyageService from '../services/voyage.service'; // Import the new service
+// Use standard Request type; middleware modifies it globally
+// import { AuthenticatedRequest } from '../middlewares/auth.middleware'; 
+
+export const getCurrentVoyageDetails = async (req: Request, res: Response, next: NextFunction) => {
+    // req.user is added by the authenticate middleware
+    const userId = req.user?.id; 
+
+    if (!userId) {
+        // This should technically be caught by the authenticate middleware, but good practice
+        return res.status(401).json({ message: 'Authentication required.' });
+    }
+
+    try {
+        // 1. Find the captain's assigned vessel
+        const vessel = await VesselModel.findByCaptainId(userId);
+        if (!vessel) {
+            return res.status(404).json({ message: 'No vessel assigned to this captain.' });
+        }
+
+        // 2. Find the active voyage for this vessel
+        const activeVoyage = await VoyageModel.findActiveByVesselId(vessel.id);
+        if (!activeVoyage) {
+            return res.status(404).json({ message: 'No active voyage found for this vessel.' });
+        }
+
+        // 3. Find the first (Departure) report for this voyage to get initial cargo status
+        const departureReport = await ReportModel.getFirstReportForVoyage(activeVoyage.id);
+        if (!departureReport || departureReport.reportType !== 'departure') {
+            // This indicates an inconsistent state, as an active voyage should always have a departure report
+            console.error(`Inconsistent state: Active voyage ${activeVoyage.id} has no valid departure report.`);
+            return res.status(500).json({ message: 'Internal server error: Could not retrieve initial voyage details.' });
+        }
+
+        // 4. Construct and send the response
+        const voyageDetails = {
+            voyageId: activeVoyage.id,
+            departurePort: activeVoyage.departurePort,
+            destinationPort: activeVoyage.destinationPort,
+            // Ensure cargoStatus exists on the departure report type
+            initialCargoStatus: (departureReport as any).cargoStatus, // Cast needed if BaseReport doesn't include it directly
+        };
+
+        res.status(200).json(voyageDetails);
+
+    } catch (error) {
+        console.error('Error fetching current voyage details:', error);
+        next(error); // Pass error to the global error handler
+    }
+};
+
+// --- NEW Controller action to get the current voyage state ---
+export const getCurrentVoyageState = async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
+    if (!userId) {
+        return res.status(401).json({ message: 'Authentication required.' });
+    }
+
+    try {
+        // 1. Find the captain's assigned vessel
+        const vessel = await VesselModel.findByCaptainId(userId);
+        if (!vessel) {
+            // If no vessel assigned, there's no voyage state to determine
+            // Return a specific state or handle as needed by frontend
+            return res.status(200).json({ voyageState: 'NO_VESSEL_ASSIGNED' }); // Or maybe 404? Discuss FE handling.
+        }
+
+        // 2. Get the voyage state from the service
+        const voyageState = await VoyageService.getCurrentVoyageState(vessel.id);
+
+        // 3. Send the response
+        res.status(200).json({ voyageState });
+
+    } catch (error) {
+        console.error('Error fetching current voyage state:', error);
+        next(error); // Pass error to the global error handler
+    }
+};

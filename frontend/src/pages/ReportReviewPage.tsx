@@ -1,0 +1,306 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getReportById, reviewReport } from '../services/api'; // Import specific functions
+// Import the full report view type
+import { FullReportViewDTO } from '../types/report'; 
+
+// Placeholder type removed
+
+const ReportReviewPage: React.FC = () => {
+  const { reportId } = useParams<{ reportId: string }>();
+  const navigate = useNavigate();
+  
+  // Use the correct DTO type for state
+  const [reportDetails, setReportDetails] = useState<FullReportViewDTO | null>(null); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reviewComments, setReviewComments] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchReportDetails = async () => {
+      if (!reportId) {
+        setError("Report ID is missing.");
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      setError(null);
+      setSubmitError(null); // Clear previous submission errors
+      try {
+        // Call the actual API function
+        const fetchedReport = await getReportById(reportId);
+        setReportDetails(fetchedReport); 
+      } catch (err: any) {
+        console.error(`Error fetching report ${reportId}:`, err);
+        setError(err.response?.data?.message || `Failed to load report details for ID: ${reportId}.`);
+        setReportDetails(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReportDetails();
+  }, [reportId]); // Refetch if reportId changes
+
+  const handleReviewSubmit = async (status: 'approved' | 'rejected') => {
+     if (!reportId) return;
+     setIsSubmitting(true);
+     setSubmitError(null);
+     try {
+        // Call the actual API function
+        await reviewReport(reportId, { status, reviewComments });
+        
+        // On success, navigate back to the dashboard
+        navigate('/office'); // Navigate to pending reports list
+     } catch (err: any) {
+         console.error(`Error submitting review for report ${reportId}:`, err);
+         setSubmitError(err.response?.data?.message || `Failed to ${status} report.`);
+     } finally {
+         setIsSubmitting(false);
+     }
+  };
+
+  if (isLoading) return <p className="text-center p-4">Loading report details...</p>;
+  if (error) return <p className="text-center text-red-600 bg-red-100 p-3 rounded">Error: {error}</p>;
+  if (!reportDetails) return <p className="text-center p-4">Report not found.</p>;
+
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <h1 className="text-2xl font-semibold text-gray-800 mb-4">Review Report: <span className="font-mono text-lg">{reportId}</span></h1>
+      
+      {/* Display Report Details */}
+      <div className="bg-white p-6 rounded-lg shadow mb-6 space-y-6">
+        {/* --- General Info --- */}
+        <section>
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">General Information</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+            <div><strong>Report Type:</strong> <span className="capitalize">{reportDetails.reportType}</span></div>
+            <div><strong>Report Date:</strong> {reportDetails.reportDate}</div>
+            <div><strong>Report Time:</strong> {reportDetails.reportTime} ({reportDetails.timeZone})</div>
+            <div><strong>Vessel:</strong> {reportDetails.vesselName}</div>
+            <div><strong>Captain:</strong> {reportDetails.captainName}</div>
+            <div><strong>Status:</strong> <span className={`px-2 py-0.5 rounded text-xs font-medium ${reportDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : reportDetails.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{reportDetails.status}</span></div>
+            {reportDetails.voyageId && <div><strong>Voyage ID:</strong> <span className="font-mono text-xs">{reportDetails.voyageId}</span></div>}
+          </div>
+        </section>
+
+        {/* --- Voyage & Cargo --- */}
+        {(reportDetails.reportType === 'departure' || reportDetails.voyageId) && (
+          <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Voyage & Cargo</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+              {reportDetails.departurePort && <div><strong>Departure Port:</strong> {reportDetails.departurePort}</div>}
+              {reportDetails.destinationPort && <div><strong>Destination Port:</strong> {reportDetails.destinationPort}</div>}
+              {reportDetails.voyageDistance !== null && <div><strong>Voyage Distance:</strong> {reportDetails.voyageDistance} NM</div>}
+              {reportDetails.etaDate && <div><strong>ETA:</strong> {reportDetails.etaDate} {reportDetails.etaTime}</div>}
+              {reportDetails.fwdDraft !== null && <div><strong>Fwd Draft:</strong> {reportDetails.fwdDraft?.toFixed(2)} m</div>}
+              {reportDetails.aftDraft !== null && <div><strong>Aft Draft:</strong> {reportDetails.aftDraft?.toFixed(2)} m</div>}
+              {/* Display voyage cargo details if available */}
+              {reportDetails.voyageCargoType && <div><strong>Cargo Type:</strong> {reportDetails.voyageCargoType}</div>}
+              {reportDetails.voyageCargoQuantity !== null && <div><strong>Cargo Qty:</strong> {reportDetails.voyageCargoQuantity?.toFixed(2)} MT ({reportDetails.voyageCargoStatus})</div>}
+              {/* Display report-specific cargo if different (e.g., berth) */}
+              {reportDetails.reportType === 'berth' && reportDetails.cargoQuantity !== reportDetails.voyageCargoQuantity && (
+                 <div><strong>Current Cargo Qty:</strong> {reportDetails.cargoQuantity?.toFixed(2)} MT</div>
+              )}
+            </div>
+          </section>
+        )}
+        
+        {/* --- Position & Distance --- */}
+         <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Position & Distance</h3>
+             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                {/* Display relevant position based on report type */}
+                {reportDetails.reportType === 'departure' && reportDetails.faspLatitude !== null && <div><strong>FASP:</strong> {reportDetails.faspLatitude?.toFixed(5)}, {reportDetails.faspLongitude?.toFixed(5)} @ {reportDetails.faspCourse}° ({reportDetails.faspDate} {reportDetails.faspTime})</div>}
+                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'NOON' && reportDetails.noonLatitude !== null && <div><strong>Noon Pos:</strong> {reportDetails.noonLatitude?.toFixed(5)}, {reportDetails.noonLongitude?.toFixed(5)} ({reportDetails.noonDate} {reportDetails.noonTime})</div>}
+                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'SOSP' && reportDetails.sospLatitude !== null && <div><strong>SOSP:</strong> {reportDetails.sospLatitude?.toFixed(5)}, {reportDetails.sospLongitude?.toFixed(5)} ({reportDetails.sospDate} {reportDetails.sospTime})</div>}
+                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'ROSP' && reportDetails.rospLatitude !== null && <div><strong>ROSP:</strong> {reportDetails.rospLatitude?.toFixed(5)}, {reportDetails.rospLongitude?.toFixed(5)} ({reportDetails.rospDate} {reportDetails.rospTime})</div>}
+                {reportDetails.reportType === 'arrival' && reportDetails.eospLatitude !== null && <div><strong>EOSP:</strong> {reportDetails.eospLatitude?.toFixed(5)}, {reportDetails.eospLongitude?.toFixed(5)} @ {reportDetails.eospCourse}° ({reportDetails.eospDate} {reportDetails.eospTime})</div>}
+                {reportDetails.reportType === 'berth' && reportDetails.berthLatitude !== null && <div><strong>Berth Pos:</strong> {reportDetails.berthLatitude?.toFixed(5)}, {reportDetails.berthLongitude?.toFixed(5)} ({reportDetails.berthDate} {reportDetails.berthTime})</div>}
+                
+                {/* Distances */}
+                {reportDetails.harbourDistance !== null && <div><strong>Harbour Dist:</strong> {reportDetails.harbourDistance} NM ({reportDetails.harbourTime} hrs)</div>}
+                {reportDetails.distanceSinceLastReport !== null && <div><strong>Dist Since Last:</strong> {reportDetails.distanceSinceLastReport} NM</div>}
+                {reportDetails.totalDistanceTravelled !== null && <div><strong>Total Dist Travelled:</strong> {reportDetails.totalDistanceTravelled?.toFixed(1)} NM</div>}
+                {reportDetails.distanceToGo !== null && <div><strong>Dist To Go:</strong> {reportDetails.distanceToGo?.toFixed(1)} NM</div>}
+             </div>
+         </section>
+
+        {/* --- Weather --- */}
+        <section>
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Weather</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+            {reportDetails.windDirection && <div><strong>Wind:</strong> {reportDetails.windDirection} / Force {reportDetails.windForce}</div>}
+            {reportDetails.seaDirection && <div><strong>Sea:</strong> {reportDetails.seaDirection} / State {reportDetails.seaState}</div>}
+            {reportDetails.swellDirection && <div><strong>Swell:</strong> {reportDetails.swellDirection} / {reportDetails.swellHeight?.toFixed(1)} m</div>}
+          </div>
+        </section>
+
+        {/* --- Bunkers ROB --- */}
+        <section>
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Remaining On Board (ROB)</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-2 text-sm">
+            {reportDetails.currentRobLsifo !== null && <div><strong>LSIFO:</strong> {reportDetails.currentRobLsifo?.toFixed(2)} MT</div>}
+            {reportDetails.currentRobLsmgo !== null && <div><strong>LSMGO:</strong> {reportDetails.currentRobLsmgo?.toFixed(2)} MT</div>}
+            {reportDetails.currentRobCylOil !== null && <div><strong>Cyl Oil:</strong> {reportDetails.currentRobCylOil?.toFixed(1)} L</div>}
+            {reportDetails.currentRobMeOil !== null && <div><strong>ME Oil:</strong> {reportDetails.currentRobMeOil?.toFixed(1)} L</div>}
+            {reportDetails.currentRobAeOil !== null && <div><strong>AE Oil:</strong> {reportDetails.currentRobAeOil?.toFixed(1)} L</div>}
+          </div>
+        </section>
+
+        {/* --- Bunkers Consumption & Supply --- */}
+        <section>
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Consumption (24h) & Supply</h3>
+           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+             {/* Consumption */}
+             {reportDetails.totalConsumptionLsifo !== null && <div><strong>Total LSIFO Cons:</strong> {reportDetails.totalConsumptionLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.totalConsumptionLsmgo !== null && <div><strong>Total LSMGO Cons:</strong> {reportDetails.totalConsumptionLsmgo?.toFixed(2)} MT</div>}
+             {reportDetails.totalConsumptionCylOil !== null && <div><strong>Total Cyl Oil Cons:</strong> {reportDetails.totalConsumptionCylOil?.toFixed(1)} L</div>}
+             {reportDetails.totalConsumptionMeOil !== null && <div><strong>Total ME Oil Cons:</strong> {reportDetails.totalConsumptionMeOil?.toFixed(1)} L</div>}
+             {reportDetails.totalConsumptionAeOil !== null && <div><strong>Total AE Oil Cons:</strong> {reportDetails.totalConsumptionAeOil?.toFixed(1)} L</div>}
+             {/* Supply */}
+             {reportDetails.supplyLsifo !== null && reportDetails.supplyLsifo > 0 && <div className="text-blue-600"><strong>LSIFO Supply:</strong> {reportDetails.supplyLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.supplyLsmgo !== null && reportDetails.supplyLsmgo > 0 && <div className="text-blue-600"><strong>LSMGO Supply:</strong> {reportDetails.supplyLsmgo?.toFixed(2)} MT</div>}
+             {reportDetails.supplyCylOil !== null && reportDetails.supplyCylOil > 0 && <div className="text-blue-600"><strong>Cyl Oil Supply:</strong> {reportDetails.supplyCylOil?.toFixed(1)} L</div>}
+             {reportDetails.supplyMeOil !== null && reportDetails.supplyMeOil > 0 && <div className="text-blue-600"><strong>ME Oil Supply:</strong> {reportDetails.supplyMeOil?.toFixed(1)} L</div>}
+             {reportDetails.supplyAeOil !== null && reportDetails.supplyAeOil > 0 && <div className="text-blue-600"><strong>AE Oil Supply:</strong> {reportDetails.supplyAeOil?.toFixed(1)} L</div>}
+           </div>
+        </section>
+
+        {/* --- Machinery ME --- */}
+        <section>
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Main Engine Parameters</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+            {reportDetails.meFoPressure !== null && <div><strong>FO Press:</strong> {reportDetails.meFoPressure?.toFixed(1)} bar</div>}
+            {reportDetails.meLubOilPressure !== null && <div><strong>LO Press:</strong> {reportDetails.meLubOilPressure?.toFixed(1)} bar</div>}
+            {reportDetails.meFwInletTemp !== null && <div><strong>FW Inlet:</strong> {reportDetails.meFwInletTemp?.toFixed(1)} °C</div>}
+            {reportDetails.meLoInletTemp !== null && <div><strong>LO Inlet:</strong> {reportDetails.meLoInletTemp?.toFixed(1)} °C</div>}
+            {reportDetails.meScavengeAirTemp !== null && <div><strong>Scav Air:</strong> {reportDetails.meScavengeAirTemp?.toFixed(1)} °C</div>}
+            {reportDetails.meTcRpm1 !== null && <div><strong>TC#1 RPM:</strong> {reportDetails.meTcRpm1}</div>}
+            {reportDetails.meTcRpm2 !== null && <div><strong>TC#2 RPM:</strong> {reportDetails.meTcRpm2}</div>}
+            {reportDetails.meTcExhaustTempIn !== null && <div><strong>TC Exh In:</strong> {reportDetails.meTcExhaustTempIn} °C</div>}
+            {reportDetails.meTcExhaustTempOut !== null && <div><strong>TC Exh Out:</strong> {reportDetails.meTcExhaustTempOut} °C</div>}
+            {reportDetails.meThrustBearingTemp !== null && <div><strong>Thrust Brg:</strong> {reportDetails.meThrustBearingTemp?.toFixed(1)} °C</div>}
+            {reportDetails.meDailyRunHours !== null && <div><strong>ME Daily Run:</strong> {reportDetails.meDailyRunHours?.toFixed(1)} hrs</div>}
+          </div>
+        </section>
+
+        {/* --- Machinery Engine Units --- */}
+        {reportDetails.engineUnits && reportDetails.engineUnits.length > 0 && (
+          <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Engine Units</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Unit #</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Exh. Temp (°C)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Und. Piston Air</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">PCO Outlet (°C)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">JCFW Outlet (°C)</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reportDetails.engineUnits.map((unit) => (
+                    <tr key={unit.id || unit.unitNumber}>
+                      <td className="px-3 py-2 whitespace-nowrap">{unit.unitNumber}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{unit.exhaustTemp ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{unit.underPistonAir ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{unit.pcoOutletTemp ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{unit.jcfwOutletTemp ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* --- Machinery Aux Engines --- */}
+        {reportDetails.auxEngines && reportDetails.auxEngines.length > 0 && (
+           <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Auxiliary Engines</h3>
+             <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Load (%)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">KW</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">FO Press (bar)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">LO Press (bar)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Water Temp (°C)</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Daily Run (hrs)</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reportDetails.auxEngines.map((aux) => (
+                    <tr key={aux.id || aux.engineName}>
+                      <td className="px-3 py-2 whitespace-nowrap font-medium">{aux.engineName}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.load ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.kw ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.foPress ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.lubOilPress ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.waterTemp ?? '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{aux.dailyRunHour ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+      </div>
+
+      {/* Review Actions */}
+      <div className="bg-white p-6 rounded-lg shadow">
+         <h2 className="text-xl font-semibold mb-4">Review Action</h2>
+         <div className="mb-4">
+            <label htmlFor="reviewComments" className="block text-sm font-medium text-gray-700 mb-1">
+               Review Comments (Optional)
+            </label>
+            <textarea
+               id="reviewComments"
+               rows={3}
+               className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+               value={reviewComments}
+               onChange={(e) => setReviewComments(e.target.value)}
+               disabled={isSubmitting}
+            />
+         </div>
+
+         {submitError && <p className="text-red-600 mb-4">{submitError}</p>}
+
+         <div className="flex justify-end space-x-4">
+            <button
+               onClick={() => handleReviewSubmit('rejected')}
+               disabled={isSubmitting}
+               className={`px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out ${
+                  isSubmitting 
+                     ? 'bg-red-300 cursor-not-allowed' 
+                     : 'bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'
+               }`}
+            >
+               {isSubmitting ? 'Submitting...' : 'Reject'}
+            </button>
+            <button
+               onClick={() => handleReviewSubmit('approved')}
+               disabled={isSubmitting}
+                className={`px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out ${
+                  isSubmitting 
+                     ? 'bg-green-300 cursor-not-allowed' 
+                     : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+               }`}
+            >
+               {isSubmitting ? 'Submitting...' : 'Approve'}
+            </button>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+export default ReportReviewPage;

@@ -59,7 +59,7 @@ export function setupDatabase(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
-      voyageId TEXT NOT NULL,
+      voyageId TEXT NULL, -- Changed from NOT NULL to NULL
       vesselId TEXT NOT NULL,
       reportType TEXT NOT NULL CHECK(reportType IN ('departure', 'noon', 'arrival', 'berth')),
       status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),

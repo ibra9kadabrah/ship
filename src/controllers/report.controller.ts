@@ -117,11 +117,43 @@ export const ReportController = {
            res.status(400).json({ error: error.message });
        }
        else {
-           res.status(500).json({ error: 'Failed to review report' });
+            res.status(500).json({ error: 'Failed to review report' });
+        }
+     }
+   },
+
+   // Get report history for the logged-in captain
+   async getMyReportHistory(req: Request, res: Response): Promise<void> {
+     try {
+       if (!req.user) {
+         res.status(401).json({ error: 'User not authenticated' });
+         return;
        }
-    }
-  }
-};
+       // No need to check role here as middleware should handle it
+       const captainId = req.user.id;
+       
+       const reports = await ReportService.getReportsByCaptainId(captainId);
+       res.status(200).json(reports);
+
+     } catch (error: any) {
+       console.error('Error fetching captain report history:', error);
+       res.status(500).json({ error: 'Failed to fetch report history' });
+     }
+   },
+
+   // Get all reports (admin only)
+   async getAllReports(req: Request, res: Response): Promise<void> {
+     try {
+       // Middleware already ensures admin role
+       // TODO: Add pagination/filtering query parameters (e.g., req.query.page, req.query.limit)
+       const reports = await ReportService.getAllReports(); // Call service method (to be created)
+       res.status(200).json(reports);
+     } catch (error: any) {
+       console.error('Error fetching all reports:', error);
+       res.status(500).json({ error: 'Failed to fetch all reports' });
+     }
+   }
+ };
 
 // Note: We might need to export ReportType if used directly in controller validation
 // export { ReportType }; 

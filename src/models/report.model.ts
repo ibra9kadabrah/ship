@@ -18,7 +18,7 @@ import {
 // This should align EXACTLY with the columns defined in the 'reports' table schema
 type ReportRecordData = {
     id: string;
-    voyageId: string;
+    voyageId: string | null; // Allow null
     vesselId: string;
     reportType: ReportType;
     status: ReportStatus;
@@ -158,11 +158,23 @@ export const ReportModel = {
     return report || null;
   },
 
-  // Get pending reports - Fetches ONLY from the 'reports' table
-  // Returns array of Partial<Report> because related arrays are not fetched here.
-  getPendingReports(): Partial<Report>[] {
-    const stmt = db.prepare(`SELECT * FROM reports WHERE status = ? ORDER BY createdAt DESC`);
-    return stmt.all('pending') as Partial<Report>[];
+  // Get pending reports - Joins with vessels and users to get names
+  // Returns array of Partial<Report> enhanced with vesselName and captainName
+  getPendingReports(): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
+    const sql = `
+      SELECT 
+        r.*, 
+        v.name AS vesselName, 
+        u.name AS captainName 
+      FROM reports r
+      LEFT JOIN vessels v ON r.vesselId = v.id
+      LEFT JOIN users u ON r.captainId = u.id
+      WHERE r.status = ? 
+      ORDER BY r.createdAt DESC
+    `;
+    const stmt = db.prepare(sql);
+    // Cast the result to include the joined names
+    return stmt.all('pending') as (Partial<Report> & { vesselName?: string; captainName?: string })[];
   },
 
   // Review a report (approve or reject) - Updates the 'reports' table
@@ -227,6 +239,38 @@ export const ReportModel = {
     return report || null;
   },
 
+  // Get latest *approved* report for a vessel (needed for voyage state check)
+  getLatestApprovedReportForVessel(vesselId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE vesselId = ? AND status = 'approved'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+      LIMIT 1
+    `);
+    const report = stmt.get(vesselId) as Partial<Report> | undefined;
+    return report || null;
+  },
+
+  // Find the report immediately preceding a given report ID for the same vessel
+  findPreviousReport(reportId: string, vesselId: string): Partial<Report> | null {
+    // First get the timestamp of the current report
+    const currentReport = this.findById(reportId);
+    if (!currentReport || !currentReport.createdAt) {
+        console.warn(`Could not find current report ${reportId} or its createdAt timestamp to find previous report.`);
+        return null;
+    }
+    const currentTimestamp = currentReport.createdAt; // Use ISO string for comparison
+
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE vesselId = ? AND createdAt < ?
+      ORDER BY createdAt DESC -- Order by newest first among those older than current
+      LIMIT 1
+    `);
+    const report = stmt.get(vesselId, currentTimestamp) as Partial<Report> | undefined;
+    return report || null;
+  },
+
   // Get the first report for a voyage (typically the departure report)
   getFirstReportForVoyage(voyageId: string): Partial<Report> | null {
     const stmt = db.prepare(`
@@ -254,19 +298,7 @@ export const ReportModel = {
     const reports = this._getAllReportsForVoyage(voyageId);
     const filteredReports = reports.filter(report => report.reportType === reportType);
     // The sorting is already newest first from _getAllReportsForVoyage
-    return filteredReports[0] || null;
-  },
-
-  // Get the latest APPROVED report for a voyage
-  getLatestApprovedReportForVoyage(voyageId: string): Partial<Report> | null {
-    const stmt = db.prepare(`
-      SELECT * FROM reports
-      WHERE voyageId = ? AND status = 'approved'
-      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
-      LIMIT 1
-    `);
-    const report = stmt.get(voyageId) as Partial<Report> | undefined;
-    return report || null;
+    return filteredReports[0] || null; 
   },
 
   // Check if a captain has pending reports for a specific voyage
@@ -278,7 +310,65 @@ export const ReportModel = {
     `);
     const result = stmt.get(captainId, voyageId) as { count: number };
     return result.count > 0;
-  }
+  },
+
+  // Update the voyageId for a specific report
+  updateVoyageId(reportId: string, voyageId: string): boolean {
+    const stmt = db.prepare(`
+      UPDATE reports
+      SET voyageId = ?
+      WHERE id = ?
+    `);
+    try {
+      const result = stmt.run(voyageId, reportId);
+      console.log(`Linking report ${reportId} to voyage ${voyageId}. Changes: ${result.changes}`); // Added logging
+      return result.changes > 0;
+    } catch (error) {
+      console.error(`Error updating voyageId for report ${reportId}:`, error);
+      return false;
+    }
+  },
+
+  // Find all reports submitted by a specific captain
+  findByCaptainId(captainId: string): Partial<Report>[] {
+    const stmt = db.prepare(`
+      SELECT * FROM reports 
+      WHERE captainId = ? 
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+    `);
+    return stmt.all(captainId) as Partial<Report>[];
+  },
+
+  // Find all reports (for admin/office history) - Joins with vessels and users
+  findAll(): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
+    // TODO: Add pagination (LIMIT/OFFSET) and filtering later
+    const sql = `
+      SELECT 
+        r.*, 
+        v.name AS vesselName, 
+        u.name AS captainName 
+      FROM reports r
+      LEFT JOIN vessels v ON r.vesselId = v.id
+      LEFT JOIN users u ON r.captainId = u.id
+      ORDER BY r.reportDate DESC, r.reportTime DESC, r.createdAt DESC
+    `;
+    const stmt = db.prepare(sql);
+    // Cast the result to include the joined names
+    return stmt.all() as (Partial<Report> & { vesselName?: string; captainName?: string })[];
+  },
+
+  // Find the latest approved departure report for a specific vessel
+  findLatestApprovedDepartureReport(vesselId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * 
+      FROM reports 
+      WHERE vesselId = ? AND status = 'approved' AND reportType = 'departure'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC 
+      LIMIT 1
+    `);
+    const report = stmt.get(vesselId) as Partial<Report> | undefined;
+    return report || null;
+  },
 };
 
 export default ReportModel;

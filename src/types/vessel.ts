@@ -14,6 +14,8 @@ export interface Vessel {
     createdAt: Date;
     updatedAt: Date;
     isActive: boolean;
+    // Add field to carry over destination from previous voyage
+    lastDestinationPort?: string | null; 
   }
   
   export interface CreateVesselDTO {

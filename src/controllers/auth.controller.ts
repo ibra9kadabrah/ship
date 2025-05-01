@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import UserModel from '../models/user.model';
-import { CreateUserDTO, UserLoginDTO } from '../types/user';
+import { CreateUserDTO, UserLoginDTO, UserRole } from '../types/user'; // Import UserRole
 
 // JWT secret should be in environment variable in production
 const JWT_SECRET = process.env.JWT_SECRET || 'mrv-ship-reporting-secret';
@@ -85,6 +85,32 @@ export const AuthController = {
     } catch (error) {
       console.error('Error creating initial admin:', error);
       res.status(500).json({ error: 'Failed to create initial admin' });
+    }
+  },
+
+  // Get users by role (admin only)
+  getUsersByRole(req: Request, res: Response): void {
+    try {
+      const role = req.query.role as UserRole;
+
+      // Validate role query parameter
+      if (!role || !['admin', 'captain', 'office'].includes(role)) {
+        res.status(400).json({ error: 'Invalid or missing role query parameter. Must be admin, captain, or office.' });
+        return;
+      }
+
+      const users = UserModel.findByRole(role);
+      
+      // Exclude passwords from the response
+      const usersWithoutPasswords = users.map(user => {
+        const { password, ...userWithoutPassword } = user;
+        return userWithoutPassword;
+      });
+
+      res.status(200).json(usersWithoutPasswords);
+    } catch (error) {
+      console.error('Error fetching users by role:', error);
+      res.status(500).json({ error: 'Failed to fetch users by role' });
     }
   }
 };

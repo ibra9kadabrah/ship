@@ -10,6 +10,7 @@ import {
     CargoStatus, // Import CargoStatus
     Report // Import Report type
 } from '../types/report';
+import { Vessel } from '../types/vessel'; // Import Vessel type
 
 /**
  * Validates the input data for a report based on its type and the previous report's state.
@@ -17,17 +18,61 @@ import {
  * @param reportInput The report data DTO.
  * @param previousReport The previous report object (partial) for context (e.g., passage state).
  * @param initialCargoStatus The cargo status from the voyage's departure report.
+ * @param vessel The vessel object, needed to check if initial ROBs are set.
  */
 export function validateReportInput(
     reportInput: CreateReportDTO, 
+    vessel: Vessel, // Add vessel parameter
     previousReport?: Partial<Report> | null, 
     initialCargoStatus: CargoStatus | null = null // Add default null
 ): void {
 
-    // Example structure:
+    // --- Report Sequence Validation ---
+    if (previousReport) { // Only check sequence if there's a previous report in the voyage
+        const previousType = previousReport.reportType;
+        const currentType = reportInput.reportType;
+
+        switch (previousType) {
+            case 'departure':
+                if (currentType !== 'noon' && currentType !== 'arrival') {
+                    throw new Error(`Invalid report sequence: After 'departure', only 'noon' or 'arrival' is allowed, not '${currentType}'.`);
+                }
+                break;
+            case 'noon':
+                if (currentType !== 'noon' && currentType !== 'arrival') {
+                    throw new Error(`Invalid report sequence: After 'noon', only 'noon' or 'arrival' is allowed, not '${currentType}'.`);
+                }
+                break;
+            case 'arrival':
+                // After arrival, only Berth or a *new* Departure is allowed.
+                // The service layer handles the new voyage logic for departure.
+                if (currentType !== 'berth' && currentType !== 'departure') { 
+                    throw new Error(`Invalid report sequence: After 'arrival', only 'berth' or 'departure' is allowed, not '${currentType}'.`);
+                }
+                break;
+            case 'berth':
+                 // After berth, only another Berth or a *new* Departure is allowed.
+                if (currentType !== 'berth' && currentType !== 'departure') {
+                    throw new Error(`Invalid report sequence: After 'berth', only 'berth' or 'departure' is allowed, not '${currentType}'.`);
+                }
+                break;
+        }
+    } else { 
+        // No previous report for this voyage exists.
+        // The only valid report type here is 'departure'.
+        // Note: The service layer separately handles the "first report ever for vessel must be departure" rule.
+        if (reportInput.reportType !== 'departure') {
+             throw new Error(`Invalid report: Cannot submit '${reportInput.reportType}' as the first report of a voyage. Must be 'departure'.`);
+        }
+    }
+    // --- End Report Sequence Validation ---
+
+
+    // --- Specific Field Validations ---
     switch (reportInput.reportType) {
         case 'departure':
-            validateDepartureReport(reportInput);
+            // Pass the vessel object to the specific validator
+            validateDepartureReport(reportInput, vessel); 
             break;
         case 'noon':
             validateNoonReport(reportInput, previousReport?.passageState as PassageState | null); // Cast to PassageState
@@ -49,7 +94,27 @@ export function validateReportInput(
 
 // --- Helper Validation Functions ---
 
-function validateDepartureReport(reportInput: DepartureSpecificData): void {
+// Note: This function now needs the vessel object to check if initial ROBs are already set.
+// However, validateReportInput calls this *before* passing the vessel object down.
+// We need to adjust the main validateReportInput function to pass the vessel object here.
+// For now, let's add the logic assuming 'vessel' is available.
+// We will fix the call signature in the next step.
+function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Vessel): void { 
+
+    // Check if initial ROBs are provided when they shouldn't be
+    if (vessel.initialRobLsifo !== null) { // Vessel initial ROBs are already set
+        const hasInitialRobInput = (
+            reportInput.initialRobLsifo !== undefined && reportInput.initialRobLsifo !== null ||
+            reportInput.initialRobLsmgo !== undefined && reportInput.initialRobLsmgo !== null ||
+            reportInput.initialRobCylOil !== undefined && reportInput.initialRobCylOil !== null ||
+            reportInput.initialRobMeOil !== undefined && reportInput.initialRobMeOil !== null ||
+            reportInput.initialRobAeOil !== undefined && reportInput.initialRobAeOil !== null
+        );
+        if (hasInitialRobInput) {
+            throw new Error("Initial ROB fields cannot be provided for subsequent departure reports after the first one has been approved.");
+        }
+    }
+
     const requiredFields: Array<keyof DepartureSpecificData> = [
         // BaseReportData fields (already mandatory in type)
         'vesselId', 'reportDate', 'reportTime', 'timeZone', 'windDirection', 'seaDirection', 

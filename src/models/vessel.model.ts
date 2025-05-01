@@ -188,6 +188,21 @@ export const VesselModel = {
       console.error(`Error updating initial ROB for vessel ${vesselId}:`, error);
       return false;
     }
+  },
+
+  // Find vessel assigned to a specific captain
+  findByCaptainId(captainId: string): Vessel | null {
+    const stmt = db.prepare(`
+      SELECT 
+        id, name, flag, imoNumber, deadweight, captainId, 
+        initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
+        createdAt, updatedAt, isActive 
+      FROM vessels 
+      WHERE captainId = ? AND isActive = 1 
+      LIMIT 1 
+    `); // Assuming a captain is assigned to only one active vessel at a time
+    const vessel = stmt.get(captainId) as Vessel | undefined;
+    return vessel || null;
   }
 };
 

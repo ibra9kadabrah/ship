@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import VesselModel from '../models/vessel.model';
-import { CreateVesselDTO, UpdateVesselDTO } from '../types/vessel';
+import VoyageModel from '../models/voyage.model'; // Import VoyageModel
+import ReportModel from '../models/report.model'; // Import ReportModel
+import { CreateVesselDTO, UpdateVesselDTO, Vessel } from '../types/vessel'; // Import Vessel type
 
 export const VesselController = {
   // Create a new vessel
@@ -117,6 +119,44 @@ export const VesselController = {
     } catch (error) {
       console.error('Error searching vessels:', error);
       res.status(500).json({ error: 'Failed to search vessels' });
+    }
+  },
+
+  // Get the vessel assigned to the currently logged-in captain
+  getMyVessel(req: Request, res: Response): void {
+    try {
+      if (!req.user || req.user.role !== 'captain') {
+        // This should ideally be caught by middleware, but double-check
+        res.status(403).json({ error: 'Access denied. Only captains can access their assigned vessel.' });
+        return;
+      }
+      
+      const captainId = req.user.id;
+      const vessel = VesselModel.findByCaptainId(captainId);
+      
+      if (!vessel) {
+        // It's possible a captain isn't assigned a vessel yet
+        res.status(404).json({ error: 'No active vessel assigned to this captain.' });
+        return;
+      }
+      
+      // Fetch the latest *approved departure report* for this vessel
+      const latestApprovedDeparture = ReportModel.findLatestApprovedDepartureReport(vessel.id);
+      // Get the destination port from that report, or null if none found
+      const lastDestinationPort = (latestApprovedDeparture && 'destinationPort' in latestApprovedDeparture) 
+                                    ? latestApprovedDeparture.destinationPort 
+                                    : null;
+
+      // Construct the response object including the last destination port
+      const vesselInfoResponse = {
+        ...vessel, // Include all original vessel fields
+        lastDestinationPort: lastDestinationPort 
+      };
+
+      res.status(200).json(vesselInfoResponse);
+    } catch (error) {
+      console.error('Error fetching assigned vessel:', error);
+      res.status(500).json({ error: 'Failed to fetch assigned vessel' });
     }
   }
 };
