@@ -17,6 +17,11 @@ export interface ReportHistoryItem {
   // Add fields returned by backend joins for pending/all reports lists
   vesselName?: string;
   captainName?: string;
+  // Add course fields for Noon reports
+  noonCourse?: number | null;
+  sospCourse?: number | null;
+  rospCourse?: number | null;
+  berthNumber?: string | null; // Added Berth Number
 }
 
 // --- Copied/Adapted from backend src/types/report.ts ---
@@ -37,11 +42,11 @@ export interface BaseReportFormData {
   seaState: number | string;
   swellHeight: number | string;
   // Bunker Data: Consumption Inputs
-  meConsumptionLsifo: number | string;
-  meConsumptionLsmgo: number | string;
-  meConsumptionCylOil: number | string;
-  meConsumptionMeOil: number | string;
-  meConsumptionAeOil: number | string;
+  meConsumptionLsifo?: number | string; // Made optional
+  meConsumptionLsmgo?: number | string; // Made optional
+  meConsumptionCylOil?: number | string; // Made optional
+  meConsumptionMeOil?: number | string; // Made optional
+  meConsumptionAeOil?: number | string; // Made optional
   boilerConsumptionLsifo: number | string;
   boilerConsumptionLsmgo: number | string;
   auxConsumptionLsifo: number | string;
@@ -53,17 +58,19 @@ export interface BaseReportFormData {
   supplyMeOil: number | string;
   supplyAeOil: number | string;
   // Machinery Data: Main Engine Parameters
-  meFoPressure: number | string;
-  meLubOilPressure: number | string;
-  meFwInletTemp: number | string;
-  meLoInletTemp: number | string;
-  meScavengeAirTemp: number | string;
-  meTcRpm1: number | string;
-  meTcRpm2: number | string;
-  meTcExhaustTempIn: number | string;
-  meTcExhaustTempOut: number | string;
-  meThrustBearingTemp: number | string;
-  meDailyRunHours: number | string;
+  meFoPressure?: number | string; // Made optional
+  meLubOilPressure?: number | string; // Made optional
+  meFwInletTemp?: number | string; // Made optional
+  meLoInletTemp?: number | string; // Made optional
+  meScavengeAirTemp?: number | string; // Made optional
+  meTcRpm1?: number | string; // Made optional
+  meTcRpm2?: number | string; // Made optional
+  meTcExhaustTempIn?: number | string; // Made optional
+  meTcExhaustTempOut?: number | string; // Made optional
+  meThrustBearingTemp?: number | string; // Made optional
+  meDailyRunHours?: number | string; // Made optional
+  mePresentRpm?: number | string; // Made optional
+  meCurrentSpeed?: number | string; // Made optional
   // Machinery Data: Related Units/Engines (Simplified for now)
   // engineUnits?: any[]; // Define more specific types later if needed
   // auxEngines?: any[];
@@ -88,13 +95,17 @@ export interface DepartureSpecificData extends BaseReportFormData {
   // FASP Data
   faspDate: string;
   faspTime: string;
-  faspLatitude: number | string;
-  faspLongitude: number | string;
+  faspLatDeg: number | string; // Changed to mandatory string/number for form
+  faspLatMin: number | string; // Changed to mandatory string/number for form
+  faspLatDir: 'N' | 'S';       // Changed to mandatory for form
+  faspLonDeg: number | string; // Changed to mandatory string/number for form
+  faspLonMin: number | string; // Changed to mandatory string/number for form
+  faspLonDir: 'E' | 'W';       // Changed to mandatory for form
   faspCourse: number | string;
   // Distance Data
   harbourDistance: number | string;
   harbourTime: string; // Format HH:MM
-  distanceSinceLastReport: number | string;
+  // distanceSinceLastReport: number | string; // Removed
   // Bunker Data: Initial ROB Inputs (Optional Input)
   initialRobLsifo?: number | string;
   initialRobLsmgo?: number | string;
@@ -129,27 +140,45 @@ export interface AuxEngineData {
 
 // --- New Types for Noon, Arrival, Berth Forms ---
 
-export type PassageState = 'NOON' | 'SOSP' | 'ROSP';
+// Allow empty string for unselected state in the form
+export type PassageState = 'NOON' | 'SOSP' | 'ROSP' | ''; 
 
 // Noon specific fields for the form payload
 export interface NoonFormData extends BaseReportFormData {
   reportType: 'noon';
   vesselId: string;
-  passageState: PassageState;
+  passageState: PassageState | null; // Allow null for payload preparation
   distanceSinceLastReport: number | string;
-  // Conditional fields
+  // Noon fields (Make Deg/Min/Dir optional as they depend on passageState)
   noonDate?: string;
   noonTime?: string;
-  noonLatitude?: number | string;
-  noonLongitude?: number | string;
+  noonLatDeg?: number | string;
+  noonLatMin?: number | string;
+  noonLatDir?: 'N' | 'S';
+  noonLonDeg?: number | string;
+  noonLonMin?: number | string;
+  noonLonDir?: 'E' | 'W';
+  noonCourse?: number | string; 
+  // SOSP fields (Make Deg/Min/Dir optional)
   sospDate?: string;
   sospTime?: string;
-  sospLatitude?: number | string;
-  sospLongitude?: number | string;
+  sospLatDeg?: number | string;
+  sospLatMin?: number | string;
+  sospLatDir?: 'N' | 'S';
+  sospLonDeg?: number | string;
+  sospLonMin?: number | string;
+  sospLonDir?: 'E' | 'W';
+  sospCourse?: number | string; 
+  // ROSP fields (Make Deg/Min/Dir optional)
   rospDate?: string;
   rospTime?: string;
-  rospLatitude?: number | string;
-  rospLongitude?: number | string;
+  rospLatDeg?: number | string;
+  rospLatMin?: number | string;
+  rospLatDir?: 'N' | 'S';
+  rospLonDeg?: number | string;
+  rospLonMin?: number | string;
+  rospLonDir?: 'E' | 'W';
+  rospCourse?: number | string; 
   // Machinery
   engineUnits?: EngineUnitData[]; 
   auxEngines?: AuxEngineData[]; 
@@ -162,8 +191,12 @@ export interface ArrivalFormData extends BaseReportFormData {
   // EOSP Data
   eospDate: string;
   eospTime: string;
-  eospLatitude: number | string;
-  eospLongitude: number | string;
+  eospLatDeg: number | string; // Changed to mandatory string/number for form
+  eospLatMin: number | string; // Changed to mandatory string/number for form
+  eospLatDir: 'N' | 'S';       // Changed to mandatory for form
+  eospLonDeg: number | string; // Changed to mandatory string/number for form
+  eospLonMin: number | string; // Changed to mandatory string/number for form
+  eospLonDir: 'E' | 'W';       // Changed to mandatory for form
   eospCourse: number | string;
   // Distance Data
   distanceSinceLastReport: number | string; 
@@ -184,8 +217,13 @@ export interface BerthFormData extends BaseReportFormData {
   // Navigation Data
   berthDate: string;
   berthTime: string;
-  berthLatitude: number | string;
-  berthLongitude: number | string;
+  berthLatDeg: number | string; // Changed to mandatory string/number for form
+  berthLatMin: number | string; // Changed to mandatory string/number for form
+  berthLatDir: 'N' | 'S';       // Changed to mandatory for form
+  berthLonDeg: number | string; // Changed to mandatory string/number for form
+  berthLonMin: number | string; // Changed to mandatory string/number for form
+  berthLonDir: 'E' | 'W';       // Changed to mandatory for form
+  berthNumber: string; // Added Berth Number (Required)
   // Cargo Operations Data
   cargoLoaded?: number | string; // Input if initial state was 'Empty'
   cargoUnloaded?: number | string; // Input if initial state was 'Loaded'
@@ -194,7 +232,7 @@ export interface BerthFormData extends BaseReportFormData {
   cargoOpsEndDate: string;
   cargoOpsEndTime: string;
   // Machinery is required for Berth form submission as well
-  engineUnits?: EngineUnitData[]; 
+  // engineUnits removed from BerthFormData
   auxEngines?: AuxEngineData[]; 
 }
 
@@ -207,10 +245,20 @@ export type ReportFormData =
 
 // Type for the response from GET /api/voyages/current/details
 export interface CurrentVoyageDetails {
+  vesselName?: string; // Added
+  vesselImoNumber?: string; // Added
+  vesselDeadweight?: number | null; // Added
   voyageId: string;
   departurePort: string;
   destinationPort: string;
+  voyageDistance?: number | null; // Added
+  actualDepartureDate?: string | null; // Added
+  actualDepartureTime?: string | null; // Added
+  etaDate?: string | null; // Added
+  etaTime?: string | null; // Added
   initialCargoStatus: CargoStatus; 
+  totalDistanceTravelled?: number | null; // Added
+  distanceToGo?: number | null; // Added
 }
 
 // Represents the logical state of the voyage based on the latest report (from backend)
@@ -255,8 +303,12 @@ export interface Report {
   cargoStatus: CargoStatus | null;
   faspDate: string | null;
   faspTime: string | null;
-  faspLatitude: number | null;
-  faspLongitude: number | null;
+  faspLatDeg: number | null;
+  faspLatMin: number | null;
+  faspLatDir: 'N' | 'S' | null;
+  faspLonDeg: number | null;
+  faspLonMin: number | null;
+  faspLonDir: 'E' | 'W' | null;
   faspCourse: number | null;
   harbourDistance: number | null;
   harbourTime: string | null;
@@ -309,30 +361,59 @@ export interface Report {
   meTcExhaustTempOut: number | null;
   meThrustBearingTemp: number | null;
   meDailyRunHours: number | null;
-  passageState: PassageState | null;
+  mePresentRpm: number | null; // Added Present RPM
+  meCurrentSpeed: number | null; // Added Current Speed
+  // Calculated Performance Metrics
+  sailingTimeVoyage?: number | null;
+  avgSpeedVoyage?: number | null;
+  // Noon Report Specific Fields
+  passageState: PassageState | null; // Keep PassageState as is
   noonDate: string | null;
   noonTime: string | null;
-  noonLatitude: number | null;
-  noonLongitude: number | null;
+  noonLatDeg: number | null;
+  noonLatMin: number | null;
+  noonLatDir: 'N' | 'S' | null;
+  noonLonDeg: number | null;
+  noonLonMin: number | null;
+  noonLonDir: 'E' | 'W' | null;
+  // noonCourse is already in FullReportViewDTO extension
   sospDate: string | null;
   sospTime: string | null;
-  sospLatitude: number | null;
-  sospLongitude: number | null;
+  sospLatDeg: number | null;
+  sospLatMin: number | null;
+  sospLatDir: 'N' | 'S' | null;
+  sospLonDeg: number | null;
+  sospLonMin: number | null;
+  sospLonDir: 'E' | 'W' | null;
+  // sospCourse is already in FullReportViewDTO extension
   rospDate: string | null;
   rospTime: string | null;
-  rospLatitude: number | null;
-  rospLongitude: number | null;
+  rospLatDeg: number | null;
+  rospLatMin: number | null;
+  rospLatDir: 'N' | 'S' | null;
+  rospLonDeg: number | null;
+  rospLonMin: number | null;
+  rospLonDir: 'E' | 'W' | null;
+  // rospCourse is already in FullReportViewDTO extension
   eospDate: string | null;
   eospTime: string | null;
-  eospLatitude: number | null;
-  eospLongitude: number | null;
+  eospLatDeg: number | null;
+  eospLatMin: number | null;
+  eospLatDir: 'N' | 'S' | null;
+  eospLonDeg: number | null;
+  eospLonMin: number | null;
+  eospLonDir: 'E' | 'W' | null;
   eospCourse: number | null;
   estimatedBerthingDate: string | null;
   estimatedBerthingTime: string | null;
   berthDate: string | null;
   berthTime: string | null;
-  berthLatitude: number | null;
-  berthLongitude: number | null;
+  berthLatDeg: number | null;
+  berthLatMin: number | null;
+  berthLatDir: 'N' | 'S' | null;
+  berthLonDeg: number | null;
+  berthLonMin: number | null;
+  berthLonDir: 'E' | 'W' | null;
   cargoLoaded: number | null;
   cargoUnloaded: number | null;
   cargoOpsStartDate: string | null;
@@ -376,4 +457,11 @@ export interface FullReportViewDTO extends Report {
   voyageCargoQuantity: number | null;
   voyageCargoType: string | null;
   voyageCargoStatus: CargoStatus | null;
+  noonCourse?: number | null; 
+  sospCourse?: number | null; // Added sospCourse
+  rospCourse?: number | null; // Added rospCourse
+  // Add calculated performance metrics to the view DTO as well
+  sailingTimeVoyage?: number | null;
+  avgSpeedVoyage?: number | null;
+  berthNumber?: string | null; // Added Berth Number
 }

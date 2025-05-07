@@ -90,8 +90,12 @@ export function setupDatabase(): void {
       -- FASP Data (optional)
       faspDate TEXT,
       faspTime TEXT,
-      faspLatitude REAL,
-      faspLongitude REAL,
+      faspLatDeg INTEGER NULL,
+      faspLatMin REAL NULL,
+      faspLatDir TEXT NULL CHECK(faspLatDir IN ('N', 'S')),
+      faspLonDeg INTEGER NULL,
+      faspLonMin REAL NULL,
+      faspLonDir TEXT NULL CHECK(faspLonDir IN ('E', 'W')),
       faspCourse REAL,
 
       -- Distance Data (optional, but required input for departure)
@@ -160,27 +164,51 @@ export function setupDatabase(): void {
       meTcExhaustTempOut REAL,
       meThrustBearingTemp REAL,
       meDailyRunHours REAL,
+      mePresentRpm REAL NULL, -- Added Present RPM
+      meCurrentSpeed REAL NULL, -- Added Current Speed
+      -- Calculated Performance Metrics
+      sailingTimeVoyage REAL NULL, -- Cumulative sailing time for the voyage up to this report
+      avgSpeedVoyage REAL NULL, -- Average speed for the voyage up to this report
 
       -- Noon Report Specific Fields
       passageState TEXT CHECK(passageState IN ('NOON', 'SOSP', 'ROSP')),
       noonDate TEXT,
       noonTime TEXT,
-      noonLatitude REAL,
-      noonLongitude REAL,
+      noonLatDeg INTEGER NULL,
+      noonLatMin REAL NULL,
+      noonLatDir TEXT NULL CHECK(noonLatDir IN ('N', 'S')),
+      noonLonDeg INTEGER NULL,
+      noonLonMin REAL NULL,
+      noonLonDir TEXT NULL CHECK(noonLonDir IN ('E', 'W')),
+      noonCourse REAL NULL, -- Added noonCourse
       sospDate TEXT,
       sospTime TEXT,
-      sospLatitude REAL,
-      sospLongitude REAL,
+      sospLatDeg INTEGER NULL,
+      sospLatMin REAL NULL,
+      sospLatDir TEXT NULL CHECK(sospLatDir IN ('N', 'S')),
+      sospLonDeg INTEGER NULL,
+      sospLonMin REAL NULL,
+      sospLonDir TEXT NULL CHECK(sospLonDir IN ('E', 'W')),
+      sospCourse REAL NULL, -- Added sospCourse
       rospDate TEXT,
       rospTime TEXT,
-      rospLatitude REAL,
-      rospLongitude REAL,
+      rospLatDeg INTEGER NULL,
+      rospLatMin REAL NULL,
+      rospLatDir TEXT NULL CHECK(rospLatDir IN ('N', 'S')),
+      rospLonDeg INTEGER NULL,
+      rospLonMin REAL NULL,
+      rospLonDir TEXT NULL CHECK(rospLonDir IN ('E', 'W')),
+      rospCourse REAL NULL, -- Added rospCourse
 
       -- Arrival Report Specific Fields
       eospDate TEXT,
       eospTime TEXT,
-      eospLatitude REAL,
-      eospLongitude REAL,
+      eospLatDeg INTEGER NULL,
+      eospLatMin REAL NULL,
+      eospLatDir TEXT NULL CHECK(eospLatDir IN ('N', 'S')),
+      eospLonDeg INTEGER NULL,
+      eospLonMin REAL NULL,
+      eospLonDir TEXT NULL CHECK(eospLonDir IN ('E', 'W')),
       eospCourse REAL,
       estimatedBerthingDate TEXT,
       estimatedBerthingTime TEXT,
@@ -188,8 +216,12 @@ export function setupDatabase(): void {
       -- Berth Report Specific Fields
       berthDate TEXT,
       berthTime TEXT,
-      berthLatitude REAL,
-      berthLongitude REAL,
+      berthLatDeg INTEGER NULL,
+      berthLatMin REAL NULL,
+      berthLatDir TEXT NULL CHECK(berthLatDir IN ('N', 'S')),
+      berthLonDeg INTEGER NULL,
+      berthLonMin REAL NULL,
+      berthLonDir TEXT NULL CHECK(berthLonDir IN ('E', 'W')),
       cargoLoaded REAL,
       cargoUnloaded REAL,
       -- cargoQuantity REAL, -- Already exists
@@ -197,6 +229,7 @@ export function setupDatabase(): void {
       cargoOpsStartTime TEXT,
       cargoOpsEndDate TEXT,
       cargoOpsEndTime TEXT,
+      berthNumber TEXT NULL, -- Added Berth Number
       
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
@@ -207,6 +240,22 @@ export function setupDatabase(): void {
       FOREIGN KEY (reviewerId) REFERENCES users(id)
     )
   `);
+
+  // --- Add berthNumber column if it doesn't exist ---
+  try {
+    db.exec(`ALTER TABLE reports ADD COLUMN berthNumber TEXT NULL`);
+    console.log("Added 'berthNumber' column to 'reports' table.");
+  } catch (error: any) {
+    // Ignore error if column already exists (common in SQLite)
+    if (!error.message.includes('duplicate column name')) {
+      console.error("Error adding 'berthNumber' column:", error);
+      // Optionally re-throw if it's a different error you want to halt on
+      // throw error; 
+    } else {
+      // console.log("'berthNumber' column already exists."); // Optional: Log if it exists
+    }
+  }
+  // --- End Add berthNumber column ---
 
   // Create report_engine_units table
   db.exec(`

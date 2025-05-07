@@ -1,4 +1,5 @@
 import React, { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import apiClient from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
@@ -8,6 +9,7 @@ import BunkerSupplySection from './sections/BunkerSupplySection';
 import MachineryMEParamsSection from './sections/MachineryMEParamsSection';
 import EngineUnitsSection from './sections/EngineUnitsSection';
 import AuxEnginesSection from './sections/AuxEnginesSection';
+import CoordinateInputGroup from './CoordinateInputGroup'; // Import the new component
 
 // Use BaseReportFormData for the state, adding departure-specific optional fields
 type DepartureFormData = Partial<BaseReportFormData & {
@@ -23,12 +25,16 @@ type DepartureFormData = Partial<BaseReportFormData & {
   cargoStatus: CargoStatus;
   faspDate: string;
   faspTime: string;
-  faspLatitude: number | string;
-  faspLongitude: number | string;
+  faspLatDeg: number | string; // Replaced faspLatitude
+  faspLatMin: number | string; // Replaced faspLatitude
+  faspLatDir: 'N' | 'S';       // Replaced faspLatitude
+  faspLonDeg: number | string; // Replaced faspLongitude
+  faspLonMin: number | string; // Replaced faspLongitude
+  faspLonDir: 'E' | 'W';       // Replaced faspLongitude
   faspCourse: number | string;
   harbourDistance: number | string;
   harbourTime: string;
-  distanceSinceLastReport: number | string;
+  // distanceSinceLastReport: number | string; // Removed
   initialRobLsifo?: number | string;
   initialRobLsmgo?: number | string;
   initialRobCylOil?: number | string;
@@ -54,6 +60,7 @@ const initialAuxEngines: AuxEngineData[] = [
 ];
 
 const DepartureForm: React.FC = () => {
+  const navigate = useNavigate(); // Initialize useNavigate
   const { user } = useAuth(); // Assuming captain is logged in
   const [vesselInfo, setVesselInfo] = useState<VesselInfo | null>(null);
   const [isLoadingVessel, setIsLoadingVessel] = useState(true);
@@ -81,12 +88,16 @@ const DepartureForm: React.FC = () => {
     cargoStatus: 'Loaded', // Required (default)
     faspDate: '', // Required
     faspTime: '', // Required
-    faspLatitude: '', // Required
-    faspLongitude: '', // Required
+    faspLatDeg: '', // Required
+    faspLatMin: '', // Required
+    faspLatDir: 'N', // Required (default N)
+    faspLonDeg: '', // Required
+    faspLonMin: '', // Required
+    faspLonDir: 'E', // Required (default E)
     faspCourse: '', // Required
     harbourDistance: '', // Required
     harbourTime: '', // Required
-    distanceSinceLastReport: '', // Required
+    // distanceSinceLastReport: '', // Removed
     // Weather (Required)
     windDirection: 'N', 
     seaDirection: 'N',
@@ -128,6 +139,8 @@ const DepartureForm: React.FC = () => {
     meTcExhaustTempOut: '',
     meThrustBearingTemp: '',
     meDailyRunHours: '',
+    mePresentRpm: '', // Added mePresentRpm
+    meCurrentSpeed: '', // Added Current Speed
     // Initialize machinery arrays in state
     engineUnits: initialEngineUnits,
     auxEngines: initialAuxEngines,
@@ -176,7 +189,26 @@ const DepartureForm: React.FC = () => {
   // Handle standard form input changes
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Special handling for coordinate direction selects
+    if (name === 'faspLatDir' || name === 'faspLonDir') {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Specific handlers for CoordinateInputGroup
+  const handleCoordinateChange = (
+    prefix: 'faspLat' | 'faspLon', 
+    part: 'Deg' | 'Min' | 'Dir', 
+    value: string
+  ) => {
+    const name = `${prefix}${part}`;
+    if (part === 'Dir') {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // Specific handlers for nested machinery data arrays
@@ -211,7 +243,64 @@ const DepartureForm: React.FC = () => {
     setSubmitSuccess(null);
     setIsSubmitting(true);
 
-    // TODO: Add more robust validation here for all required fields
+    // --- Input Format Validation ---
+    const errors: string[] = [];
+    const numericFields = [
+        'voyageDistance', 'fwdDraft', 'aftDraft', 'cargoQuantity', 
+        'faspLatDeg', 'faspLatMin', // Replaced faspLatitude
+        'faspLonDeg', 'faspLonMin', // Replaced faspLongitude
+        'faspCourse',
+        'harbourDistance', /* 'distanceSinceLastReport', */ 'windForce', 'seaState', 'swellHeight', // Removed distanceSinceLastReport
+        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
+        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
+        'initialRobLsifo', 'initialRobLsmgo', 'initialRobCylOil', 'initialRobMeOil', 'initialRobAeOil', // Optional, validate if present
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
+        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours'
+    ];
+    const stringOnlyFields = ['departurePort', 'destinationPort', 'cargoType'];
+
+    // Validate standard numeric fields
+    numericFields.forEach(field => {
+        const value = formData[field as keyof DepartureFormData];
+        // Allow empty strings for optional fields (like initial ROBs, meTcRpm2), but fail if non-empty and not numeric
+        if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+            errors.push(`${field} must be a valid number.`);
+        }
+    });
+
+    // Validate string-only fields (no digits allowed)
+    stringOnlyFields.forEach(field => {
+        const value = formData[field as keyof DepartureFormData];
+        if (value && /\d/.test(String(value))) { // Check if value exists and contains digits
+            errors.push(`${field} cannot contain numbers.`);
+        }
+    });
+
+    // Validate Engine Units (numeric)
+    formData.engineUnits?.forEach((unit, index) => {
+        Object.entries(unit).forEach(([key, value]) => {
+            if (key !== 'unitNumber' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Engine Unit #${unit.unitNumber} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    // Validate Aux Engines (numeric)
+    formData.auxEngines?.forEach((aux, index) => {
+        Object.entries(aux).forEach(([key, value]) => {
+            if (key !== 'engineName' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Aux Engine ${aux.engineName} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    if (errors.length > 0) {
+        setSubmitError(errors.join(' '));
+        setIsSubmitting(false);
+        return;
+    }
+    // --- End Input Format Validation ---
 
     // Construct payload ensuring all required fields are present and correctly typed
     const payload: DepartureSpecificData = {
@@ -236,13 +325,17 @@ const DepartureForm: React.FC = () => {
       // FASP (Required)
       faspDate: formData.faspDate || '',
       faspTime: formData.faspTime || '',
-      faspLatitude: Number(formData.faspLatitude) || 0,
-      faspLongitude: Number(formData.faspLongitude) || 0,
+      faspLatDeg: Number(formData.faspLatDeg) || 0,
+      faspLatMin: Number(formData.faspLatMin) || 0,
+      faspLatDir: formData.faspLatDir || 'N', // Default if somehow undefined
+      faspLonDeg: Number(formData.faspLonDeg) || 0,
+      faspLonMin: Number(formData.faspLonMin) || 0,
+      faspLonDir: formData.faspLonDir || 'E', // Default if somehow undefined
       faspCourse: Number(formData.faspCourse) || 0,
       // Distance (Required)
       harbourDistance: Number(formData.harbourDistance) || 0,
       harbourTime: formData.harbourTime || '',
-      distanceSinceLastReport: Number(formData.distanceSinceLastReport) || 0,
+      // distanceSinceLastReport: Number(formData.distanceSinceLastReport) || 0, // Removed
       // Weather (Required)
       windDirection: formData.windDirection || 'N',
       seaDirection: formData.seaDirection || 'N',
@@ -278,6 +371,8 @@ const DepartureForm: React.FC = () => {
       meTcExhaustTempOut: Number(formData.meTcExhaustTempOut) || 0,
       meThrustBearingTemp: Number(formData.meThrustBearingTemp) || 0,
       meDailyRunHours: Number(formData.meDailyRunHours) || 0,
+      mePresentRpm: Number(formData.mePresentRpm) || 0, // Added mePresentRpm
+      meCurrentSpeed: Number(formData.meCurrentSpeed) || 0, // Added meCurrentSpeed
       // Initial ROBs (Conditional)
       initialRobLsifo: showInitialRob ? (Number(formData.initialRobLsifo) || undefined) : undefined,
       initialRobLsmgo: showInitialRob ? (Number(formData.initialRobLsmgo) || undefined) : undefined,
@@ -315,6 +410,8 @@ const DepartureForm: React.FC = () => {
       await apiClient.post('/reports', payload); // Submit to the unified report endpoint
       setSubmitSuccess("Departure report submitted successfully!");
       // Optionally reset form: setFormData({ ...initial empty state... });
+      // Add navigation after success
+      setTimeout(() => navigate('/captain'), 1500); 
     } catch (err: any) {
       console.error("Error submitting departure report:", err);
       setSubmitError(err.response?.data?.error || "Failed to submit report.");
@@ -448,13 +545,34 @@ const DepartureForm: React.FC = () => {
             <label htmlFor="faspTime" className="block text-sm font-medium text-gray-700">FASP Time</label>
             <input type="time" id="faspTime" name="faspTime" value={formData.faspTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
           </div>
-           <div>
-            <label htmlFor="faspLatitude" className="block text-sm font-medium text-gray-700">FASP Latitude</label>
-            <input type="number" step="any" id="faspLatitude" name="faspLatitude" value={formData.faspLatitude} onChange={handleChange} required placeholder="e.g., 34.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
-          </div>
-           <div>
-            <label htmlFor="faspLongitude" className="block text-sm font-medium text-gray-700">FASP Longitude</label>
-            <input type="number" step="any" id="faspLongitude" name="faspLongitude" value={formData.faspLongitude} onChange={handleChange} required placeholder="e.g., -118.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+          {/* Replace FASP Lat/Lon inputs with CoordinateInputGroup */}
+          <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CoordinateInputGroup
+              label="FASP Latitude"
+              idPrefix="faspLat"
+              degreeValue={formData.faspLatDeg ?? ''}
+              minuteValue={formData.faspLatMin ?? ''}
+              directionValue={formData.faspLatDir ?? 'N'}
+              onDegreeChange={(e) => handleCoordinateChange('faspLat', 'Deg', e.target.value)}
+              onMinuteChange={(e) => handleCoordinateChange('faspLat', 'Min', e.target.value)}
+              onDirectionChange={(e) => handleCoordinateChange('faspLat', 'Dir', e.target.value)}
+              directionOptions={['N', 'S']}
+              required={true}
+              // Add error props if implementing detailed validation later
+            />
+            <CoordinateInputGroup
+              label="FASP Longitude"
+              idPrefix="faspLon"
+              degreeValue={formData.faspLonDeg ?? ''}
+              minuteValue={formData.faspLonMin ?? ''}
+              directionValue={formData.faspLonDir ?? 'E'}
+              onDegreeChange={(e) => handleCoordinateChange('faspLon', 'Deg', e.target.value)}
+              onMinuteChange={(e) => handleCoordinateChange('faspLon', 'Min', e.target.value)}
+              onDirectionChange={(e) => handleCoordinateChange('faspLon', 'Dir', e.target.value)}
+              directionOptions={['E', 'W']}
+              required={true}
+              // Add error props if implementing detailed validation later
+            />
           </div>
            <div>
             <label htmlFor="faspCourse" className="block text-sm font-medium text-gray-700">FASP Course (°)</label>
@@ -475,10 +593,7 @@ const DepartureForm: React.FC = () => {
              <label htmlFor="harbourTime" className="block text-sm font-medium text-gray-700">Harbour Time (HH:MM)</label>
              <input type="text" pattern="[0-9]{2}:[0-9]{2}" id="harbourTime" name="harbourTime" value={formData.harbourTime} onChange={handleChange} required placeholder="HH:MM" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
            </div>
-           <div>
-             <label htmlFor="distanceSinceLastReport" className="block text-sm font-medium text-gray-700">Distance Since Last Report (NM)</label>
-             <input type="number" step="0.1" id="distanceSinceLastReport" name="distanceSinceLastReport" value={formData.distanceSinceLastReport} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
-           </div>
+           {/* Removed Distance Since Last Report Input */}
          </div>
        </fieldset>
 
@@ -521,13 +636,13 @@ const DepartureForm: React.FC = () => {
 
       {/* --- Bunkers Section --- */}
       <fieldset className="border p-4 rounded">
-        <legend className="text-lg font-medium px-2">Bunkers</legend>
-        <BunkerConsumptionSection
-          formData={formData}
-          handleChange={handleChange}
-          title="Consumption (24h)"
-        />
-        <BunkerSupplySection
+            <legend className="text-lg font-medium px-2">Bunkers</legend>
+            <BunkerConsumptionSection
+              formData={formData}
+              handleChange={handleChange}
+              // title prop removed
+            />
+            <BunkerSupplySection
           formData={formData}
           handleChange={handleChange}
           title="Supply (Since Last)"

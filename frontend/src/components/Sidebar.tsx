@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom'; // Import useNavigate
-import { Anchor, FileText, History, AlertCircle, Loader, LogOut } from 'lucide-react'; // Import icons including LogOut
+import { Anchor, FileText, History, AlertCircle, Loader, LogOut, LayoutDashboard } from 'lucide-react'; // Import icons including LogOut and LayoutDashboard
 import { VoyageState } from '../types/report'; // Import VoyageState type
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
@@ -15,16 +15,16 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
 
   // Define common NavLink classes
   const baseLinkClasses = "flex items-center px-3 py-2 rounded-md transition-colors duration-150";
-  const activeLinkClasses = "bg-gray-900 text-white"; // Classes for active link
-  const inactiveLinkClasses = "text-gray-300 hover:bg-gray-700 hover:text-white";
-  const disabledLinkClasses = "text-gray-500 opacity-50 pointer-events-none cursor-not-allowed"; // Classes for disabled link
+  const activeLinkClasses = "bg-blue-800 text-white"; // Nautical blue active
+  const inactiveLinkClasses = "text-blue-100 hover:bg-blue-600 hover:text-white"; // Nautical blue inactive
+  const disabledLinkClasses = "text-blue-300 opacity-50 pointer-events-none cursor-not-allowed"; // Adjusted disabled for blue bg
 
   // --- Updated Logic: Check for REPORT_PENDING first ---
   const isReportPending = voyageState === 'REPORT_PENDING';
 
   // Helper functions to determine link enabled status
   // Disable all if a report is pending
-  const isDepartureEnabled = !isReportPending && (voyageState === 'NO_VOYAGE_ACTIVE' || voyageState === 'BERTHED'); // Enable on BERTHED too
+  const isDepartureEnabled = !isReportPending && (voyageState === 'NO_VOYAGE_ACTIVE' || voyageState === 'ARRIVED' || voyageState === 'BERTHED'); // Enable on ARRIVED and BERTHED too
   const isNoonEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA');
   // Corrected Arrival logic: Should only be enabled AT_SEA or DEPARTED (if first noon is skipped)
   const isArrivalEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA'); 
@@ -40,22 +40,31 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
   };
 
   return (
-    <div className="w-64 bg-gray-800 text-white p-4 flex flex-col h-full">
+    <div className="w-64 bg-blue-700 text-white p-4 flex flex-col h-full"> {/* Main background to nautical blue */}
       {/* Logo/Header */}
       <div className="flex items-center mb-8 px-2">
-        <Anchor size={28} className="mr-2 text-blue-400" />
-        <h1 className="text-xl font-bold">Maritime Reporting</h1>
+        <Anchor size={28} className="mr-2 text-blue-300" /> {/* Adjusted icon color for blue bg */}
+        <h1 className="text-xl font-bold text-white">Maritime Reporting</h1> {/* Header text to white */}
       </div>
 
       {/* Navigation */}
       <nav className="flex-grow">
         {/* History Section */}
-        <h3 className="px-3 text-xs font-semibold uppercase text-gray-500 tracking-wider mb-2">History</h3>
+        <h3 className="px-3 text-xs font-semibold uppercase text-blue-300 tracking-wider mb-2">Overview</h3> {/* Changed "History" to "Overview" and color */}
         <ul>
           <li>
+            <NavLink
+              to="/captain/dashboard-display" // Path to the new dashboard
+              end // This is now the main captain index/dashboard
+              className={({ isActive }) => getNavLinkClass(isActive, true)} // Always enabled
+            >
+              <LayoutDashboard size={18} className="mr-3" /> 
+              Dashboard
+            </NavLink>
+          </li>
+          <li>
             <NavLink 
-              to="/captain" 
-              end // Use 'end' prop for the index route
+              to="/captain/history" // Updated path for report history
               // Use the new function, always enabled (true)
               className={({ isActive }) => getNavLinkClass(isActive, true)} 
             >
@@ -66,10 +75,10 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
         </ul>
 
         {/* Forms Section */}
-        <h3 className="px-3 mt-6 text-xs font-semibold uppercase text-gray-500 tracking-wider mb-2">
+        <h3 className="px-3 mt-6 text-xs font-semibold uppercase text-blue-300 tracking-wider mb-2"> {/* Section header color */}
           Forms 
-          {voyageState === 'LOADING' && <Loader size={14} className="inline ml-2 animate-spin" />}
-          {voyageState === 'ERROR' && <AlertCircle size={14} className="inline ml-2 text-red-400" />}
+          {voyageState === 'LOADING' && <Loader size={14} className="inline ml-2 animate-spin text-blue-200" />} {/* Adjusted loader color */}
+          {voyageState === 'ERROR' && <AlertCircle size={14} className="inline ml-2 text-red-300" />} {/* Adjusted error icon color */}
         </h3>
         <ul>
           <li>

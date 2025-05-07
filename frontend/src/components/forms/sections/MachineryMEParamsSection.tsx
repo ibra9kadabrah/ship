@@ -13,6 +13,8 @@ interface MachineryMEParamsData {
   meTcExhaustTempOut?: string | number;
   meThrustBearingTemp?: string | number;
   meDailyRunHours?: string | number; // Specific to Noon/Arrival/Berth
+  mePresentRpm?: string | number; // Added Present RPM
+  meCurrentSpeed?: string | number; // Added Current Speed
 }
 
 // Define the props for the component
@@ -126,6 +128,24 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
             />
           </div>
         )}
+        {/* Added Present RPM Input */}
+        <div>
+          <label htmlFor="mePresentRpm" className="block text-sm font-medium text-gray-700">Present RPM</label>
+          <input
+            type="number" step="0.1" id="mePresentRpm" name="mePresentRpm"
+            value={formData.mePresentRpm ?? ''} onChange={handleChange} required min="0"
+            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+          />
+        </div>
+        {/* Added Current Speed Input */}
+        <div>
+          <label htmlFor="meCurrentSpeed" className="block text-sm font-medium text-gray-700">Current Speed (knots)</label>
+          <input
+            type="number" step="0.1" id="meCurrentSpeed" name="meCurrentSpeed"
+            value={formData.meCurrentSpeed ?? ''} onChange={handleChange} required min="0"
+            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+          />
+        </div>
       </div>
     </>
   );

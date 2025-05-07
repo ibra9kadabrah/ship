@@ -10,8 +10,8 @@ const OfficeSidebar: React.FC = () => {
 
   // Define common NavLink classes
   const baseLinkClasses = "flex items-center px-3 py-2 rounded-md transition-colors duration-150";
-  const activeLinkClasses = "bg-gray-900 text-white"; 
-  const inactiveLinkClasses = "text-gray-300 hover:bg-gray-700 hover:text-white";
+  const activeLinkClasses = "bg-blue-800 text-white"; // Nautical blue active
+  const inactiveLinkClasses = "text-blue-100 hover:bg-blue-600 hover:text-white"; // Nautical blue inactive
 
   const handleLogout = () => {
     logout();
@@ -19,11 +19,11 @@ const OfficeSidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 bg-gray-800 text-white p-4 flex flex-col h-full">
+    <div className="w-64 bg-blue-700 text-white p-4 flex flex-col h-full"> {/* Main background to nautical blue */}
       {/* Header */}
       <div className="flex items-center mb-8 px-2">
-        {/* You can add a logo/icon here */}
-        <h1 className="text-xl font-bold">Office Dashboard</h1>
+        {/* You can add a logo/icon here, ensure it's visible on blue */}
+        <h1 className="text-xl font-bold text-white">Office Dashboard</h1> {/* Header text to white */}
       </div>
 
       {/* Navigation */}

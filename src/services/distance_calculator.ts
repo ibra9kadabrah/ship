@@ -32,8 +32,8 @@ export function calculateDistances(input: DistanceCalculationInput): DistanceCal
 
     if (input.reportType === 'departure' || input.reportType === 'noon' || input.reportType === 'arrival') {
         if (input.reportType === 'departure') {
-            // For departure, total travelled is harbour distance + distance since last (which might be 0)
-            totalDistanceTravelled = (input.harbourDistance ?? 0) + distSinceLast;
+            // For departure, total travelled is simply the harbour distance.
+            totalDistanceTravelled = input.harbourDistance ?? 0;
         } else if (input.previousReportData) {
             // For Noon/Arrival, add distance since last to previous report's total
             totalDistanceTravelled = (input.previousReportData.totalDistanceTravelled ?? 0) + distSinceLast;

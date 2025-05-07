@@ -30,13 +30,16 @@ function hasAllInitialRobs(data: CreateReportDTO): data is DepartureSpecificData
 }
 
 // Define a type for the flat data structure used for insertion by the model
-// Includes the new optional initial ROB fields
+// This should align with the type in report.model.ts and the DB schema
 type ReportRecordData = {
-    id: string; voyageId: string; vesselId: string; reportType: ReportType; status: ReportStatus; captainId: string;
+    id: string; voyageId: string | null; vesselId: string; reportType: ReportType; status: ReportStatus; captainId: string;
     reviewerId?: string | null; reviewDate?: string | null; reviewComments?: string | null; reportDate: string; reportTime: string; timeZone: string;
     departurePort?: string | null; destinationPort?: string | null; voyageDistance?: number | null; etaDate?: string | null; etaTime?: string | null;
     fwdDraft?: number | null; aftDraft?: number | null; cargoQuantity?: number | null; cargoType?: string | null; cargoStatus?: CargoStatus | null;
-    faspDate?: string | null; faspTime?: string | null; faspLatitude?: number | null; faspLongitude?: number | null; faspCourse?: number | null;
+    faspDate?: string | null; faspTime?: string | null; 
+    faspLatDeg?: number | null; faspLatMin?: number | null; faspLatDir?: 'N' | 'S' | null;
+    faspLonDeg?: number | null; faspLonMin?: number | null; faspLonDir?: 'E' | 'W' | null;
+    faspCourse?: number | null;
     harbourDistance?: number | null; harbourTime?: string | null; distanceSinceLastReport?: number | null; totalDistanceTravelled?: number | null; distanceToGo?: number | null;
     windDirection?: CardinalDirection | null; seaDirection?: CardinalDirection | null; swellDirection?: CardinalDirection | null; windForce?: number | null; seaState?: number | null; swellHeight?: number | null;
     meConsumptionLsifo?: number | null; meConsumptionLsmgo?: number | null; meConsumptionCylOil?: number | null; meConsumptionMeOil?: number | null; meConsumptionAeOil?: number | null;
@@ -51,15 +54,35 @@ type ReportRecordData = {
     initialRobAeOil?: number | null;
     meFoPressure?: number | null; meLubOilPressure?: number | null; meFwInletTemp?: number | null; meLoInletTemp?: number | null; meScavengeAirTemp?: number | null;
     meTcRpm1?: number | null; meTcRpm2?: number | null; meTcExhaustTempIn?: number | null; meTcExhaustTempOut?: number | null; meThrustBearingTemp?: number | null; meDailyRunHours?: number | null;
+    mePresentRpm?: number | null; // Added Present RPM
+    meCurrentSpeed?: number | null; // Added Current Speed
     passageState?: PassageState | null;
-    noonDate?: string | null; noonTime?: string | null; noonLatitude?: number | null; noonLongitude?: number | null;
-    sospDate?: string | null; sospTime?: string | null; sospLatitude?: number | null; sospLongitude?: number | null;
-    rospDate?: string | null; rospTime?: string | null; rospLatitude?: number | null; rospLongitude?: number | null;
-    eospDate?: string | null; eospTime?: string | null; eospLatitude?: number | null; eospLongitude?: number | null; eospCourse?: number | null;
+    noonDate?: string | null; noonTime?: string | null; 
+    noonLatDeg?: number | null; noonLatMin?: number | null; noonLatDir?: 'N' | 'S' | null;
+    noonLonDeg?: number | null; noonLonMin?: number | null; noonLonDir?: 'E' | 'W' | null;
+    noonCourse?: number | null; // Added noonCourse
+    sospDate?: string | null; sospTime?: string | null; 
+    sospLatDeg?: number | null; sospLatMin?: number | null; sospLatDir?: 'N' | 'S' | null;
+    sospLonDeg?: number | null; sospLonMin?: number | null; sospLonDir?: 'E' | 'W' | null;
+    sospCourse?: number | null; // Added sospCourse
+    rospDate?: string | null; rospTime?: string | null; 
+    rospLatDeg?: number | null; rospLatMin?: number | null; rospLatDir?: 'N' | 'S' | null;
+    rospLonDeg?: number | null; rospLonMin?: number | null; rospLonDir?: 'E' | 'W' | null;
+    rospCourse?: number | null; // Added rospCourse
+    eospDate?: string | null; eospTime?: string | null; 
+    eospLatDeg?: number | null; eospLatMin?: number | null; eospLatDir?: 'N' | 'S' | null;
+    eospLonDeg?: number | null; eospLonMin?: number | null; eospLonDir?: 'E' | 'W' | null;
+    eospCourse?: number | null;
     estimatedBerthingDate?: string | null; estimatedBerthingTime?: string | null;
-    berthDate?: string | null; berthTime?: string | null; berthLatitude?: number | null; berthLongitude?: number | null;
-    cargoLoaded?: number | null; cargoUnloaded?: number | null; 
+    berthDate?: string | null; berthTime?: string | null; 
+    berthLatDeg?: number | null; berthLatMin?: number | null; berthLatDir?: 'N' | 'S' | null;
+    berthLonDeg?: number | null; berthLonMin?: number | null; berthLonDir?: 'E' | 'W' | null;
+    cargoLoaded?: number | null; cargoUnloaded?: number | null;
     cargoOpsStartDate?: string | null; cargoOpsStartTime?: string | null; cargoOpsEndDate?: string | null; cargoOpsEndTime?: string | null;
+    berthNumber?: string | null; // Added Berth Number
+    // Calculated Performance Metrics
+    sailingTimeVoyage?: number | null;
+    avgSpeedVoyage?: number | null;
 };
 
 // Local interface for ROB data used in reviewReport
@@ -132,15 +155,23 @@ export const ReportService = {
         const initialCargoStatusForValidation = (departureReportForValidation?.reportType === 'departure') 
             ? departureReportForValidation.cargoStatus 
             : null;
+        
+        // --- Fetch previous Noon state specifically for Noon report validation ---
+        let previousNoonPassageState: PassageState | null = null;
+        if (reportInput.reportType === 'noon' && voyageIdToUse) {
+            const previousNoonReport = ReportModel.getLatestNoonReportForVoyage(voyageIdToUse);
+            previousNoonPassageState = previousNoonReport?.passageState ?? null;
+        }
 
-        // Pass the correct previous report context to the validator
+        // Pass the correct previous report context AND previous noon state to the validator
         // For departure, previousReport is latest for vessel (can be null)
         // For others, previousReport is latest for the active voyage (should exist unless first noon)
         validateReportInput(
             reportInput, 
             vessel, // Pass the fetched vessel object
             previousReport, 
-            initialCargoStatusForValidation 
+            initialCargoStatusForValidation,
+            previousNoonPassageState // Pass the previous noon state
         ); 
 
         // --- 4. Determine Previous ROB & Handle Initial ROB Input ---
@@ -178,7 +209,29 @@ export const ReportService = {
             }
         }
 
-        // --- 5. Perform Calculations using Modules ---
+        // --- 5. Perform Calculations using Modules & Cumulative Data ---
+        // Fetch previous approved reports for cumulative calculations
+        let previousApprovedReports: Partial<Report>[] = [];
+        if (voyageIdToUse) {
+            // Need a new model function to get all *approved* reports for a voyage
+            // For now, let's assume ReportModel._getAllReportsForVoyage can be adapted or a new one created
+            // Placeholder: Assume we get the right reports here
+            previousApprovedReports = ReportModel._getAllReportsForVoyage(voyageIdToUse) 
+                                        .filter(r => r.status === 'approved'); 
+        }
+
+        // Calculate Cumulative Sailing Time
+        const currentSailingTime = reportInput.meDailyRunHours ?? 0;
+        const previousTotalSailingTime = previousApprovedReports.reduce((sum, report) => {
+            // Only sum from reports that have the field and are not Berth reports (as ME might not run)
+            if (report.reportType !== 'berth' && report.meDailyRunHours !== null && report.meDailyRunHours !== undefined) {
+                return sum + report.meDailyRunHours;
+            }
+            return sum;
+        }, 0);
+        const calculatedSailingTimeVoyage = previousTotalSailingTime + currentSailingTime;
+
+        // Calculate Bunker ROBs
         const consumptionInput: BunkerConsumptionInput = reportInput; 
         const supplyInput: BunkerSupplyInput = reportInput; 
         const totalConsumptions = calculateTotalConsumptions(consumptionInput);
@@ -189,43 +242,79 @@ export const ReportService = {
 
         const distanceInput: DistanceCalculationInput = {
             reportType: reportInput.reportType,
-            harbourDistance: reportInput.reportType === 'departure' ? reportInput.harbourDistance : undefined, 
-            distanceSinceLastReport: reportInput.reportType !== 'berth' && 'distanceSinceLastReport' in reportInput ? 
-                reportInput.distanceSinceLastReport : undefined, 
+            harbourDistance: reportInput.reportType === 'departure' ? reportInput.harbourDistance : undefined,
+            // Only include distanceSinceLastReport for Noon and Arrival reports
+            distanceSinceLastReport: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival') && 'distanceSinceLastReport' in reportInput ?
+                reportInput.distanceSinceLastReport : undefined,
             previousReportData: previousReport,
             voyageDistance: distanceCalcVoyageDistance
         };
         const distances = calculateDistances(distanceInput);
 
+        // Calculate Average Voyage Speed
+        // Use a distinct variable name here to avoid redeclaration error
+        const totalDistanceForAvgSpeed = distances.totalDistanceTravelled ?? 0; 
+        const calculatedAvgSpeedVoyage = (calculatedSailingTimeVoyage > 0 && totalDistanceForAvgSpeed > 0) 
+            ? totalDistanceForAvgSpeed / calculatedSailingTimeVoyage 
+            : 0; // Avoid division by zero, default to 0
+
         // --- 6. Prepare Data for Persistence ---
         let calculatedCargoQuantity: number | null = null;
         let calculatedCargoStatus: CargoStatus | null = null;
+        // Change const to let to allow modification within the 'berth' block
         let calculatedTotalDistance: number | null = distances.totalDistanceTravelled ?? null; 
-        let calculatedDistanceToGo: number | null = distances.distanceToGo ?? null; 
+        let calculatedDistanceToGo: number | null = distances.distanceToGo ?? null;
 
         if (reportInput.reportType === 'berth') {
+            // --- Corrected Cargo Calculation Logic for Berth ---
+            // Find the most recent report with a cargo quantity (Berth or Departure)
+            const latestBerthReport = ReportModel.getLatestReportForVoyageByType(voyageIdToUse!, 'berth');
             const departureReport = ReportModel.getFirstReportForVoyage(voyageIdToUse!);
-            if (!departureReport || departureReport.reportType !== 'departure') {
-                 throw new Error(`Cannot process berth report without a valid departure report for voyage ${voyageIdToUse!}`);
-            }
-            const initialCargoStatus = initialCargoStatusForValidation; 
-            const initialCargoQuantity = departureReport.cargoQuantity ?? 0;
-            const previousCargoQuantityValue = (previousReport && 'cargoQuantity' in previousReport && previousReport.cargoQuantity !== null) 
-                ? previousReport.cargoQuantity 
-                : initialCargoQuantity; 
-            const baseQuantity = previousCargoQuantityValue ?? 0; 
 
-            if (initialCargoStatus === 'Loaded') {
-                calculatedCargoQuantity = baseQuantity - (reportInput.cargoUnloaded ?? 0);
-            } else if (initialCargoStatus === 'Empty') {
-                calculatedCargoQuantity = baseQuantity + (reportInput.cargoLoaded ?? 0);
+            let baseCargoQuantity = 0;
+            // Safely access cargoQuantity, checking if the property exists and is a number
+            if (latestBerthReport && 'cargoQuantity' in latestBerthReport && typeof latestBerthReport.cargoQuantity === 'number') {
+                baseCargoQuantity = latestBerthReport.cargoQuantity;
+            } else if (departureReport && 'cargoQuantity' in departureReport && typeof departureReport.cargoQuantity === 'number') {
+                baseCargoQuantity = departureReport.cargoQuantity;
             } else {
-                 calculatedCargoQuantity = baseQuantity; 
+                // Should not happen in a valid voyage, but default to 0 as a safeguard
+                console.warn(`Could not find a previous cargo quantity for voyage ${voyageIdToUse!}. Defaulting to 0.`);
             }
-            calculatedCargoStatus = initialCargoStatus ?? null; 
 
+            const cargoLoaded = reportInput.cargoLoaded ?? 0;
+            const cargoUnloaded = reportInput.cargoUnloaded ?? 0;
+
+            // Calculate new quantity based on the correctly identified base quantity
+            const newCargoQuantity = baseCargoQuantity + cargoLoaded - cargoUnloaded;
+
+            // Fetch vessel deadweight for validation
+            const vesselDeadweight = vessel.deadweight;
+            if (vesselDeadweight === null || vesselDeadweight === undefined) {
+                // This should ideally not happen if vessel data is complete
+                console.warn(`Vessel ${vessel.id} deadweight is missing. Skipping upper cargo limit validation.`);
+            } else {
+                if (newCargoQuantity > vesselDeadweight) {
+                    throw new Error(`Calculated cargo quantity (${newCargoQuantity} MT) exceeds vessel deadweight (${vesselDeadweight} MT).`);
+                }
+            }
+
+            // Validate non-negative cargo quantity
+            if (newCargoQuantity < 0) {
+                throw new Error(`Calculated cargo quantity (${newCargoQuantity} MT) cannot be negative.`);
+            }
+
+            // Assign the newly calculated quantity
+            calculatedCargoQuantity = newCargoQuantity;
+            // Cargo status is no longer relevant for berth reports in this new logic
+            calculatedCargoStatus = null;
+            // --- End New Cargo Calculation Logic ---
+
+
+            // --- Distance calculation adjustment for first berth report ---
+            // (Keep existing logic for distance calculation)
             if (previousReport?.reportType !== 'berth') {
-                 const arrivalReport = ReportModel.getLatestReportForVoyageByType(voyageIdToUse!, 'arrival'); 
+                 const arrivalReport = ReportModel.getLatestReportForVoyageByType(voyageIdToUse!, 'arrival');
                  if (!arrivalReport) {
                      console.warn(`No preceding arrival report found for voyage ${voyageIdToUse!} when calculating first berth report distance. Using previous report's distance.`);
                      calculatedTotalDistance = previousReport!.totalDistanceTravelled ?? 0; 
@@ -264,15 +353,21 @@ export const ReportService = {
             voyageDistance: reportInput.reportType === 'departure' ? reportInput.voyageDistance : null,
             etaDate: reportInput.reportType === 'departure' ? reportInput.etaDate : null,
             etaTime: reportInput.reportType === 'departure' ? reportInput.etaTime : null,
-            fwdDraft: reportInput.reportType === 'departure' ? reportInput.fwdDraft : null, 
-            aftDraft: reportInput.reportType === 'departure' ? reportInput.aftDraft : null, 
+            fwdDraft: reportInput.reportType === 'departure' ? reportInput.fwdDraft : null,
+            aftDraft: reportInput.reportType === 'departure' ? reportInput.aftDraft : null,
+            // Use calculatedCargoQuantity for berth, input for departure, null otherwise
             cargoQuantity: reportInput.reportType === 'berth' ? calculatedCargoQuantity : (reportInput.reportType === 'departure' ? reportInput.cargoQuantity : null),
-            cargoType: reportInput.reportType === 'departure' ? reportInput.cargoType : null, 
-            cargoStatus: reportInput.reportType === 'berth' ? calculatedCargoStatus : (reportInput.reportType === 'departure' ? reportInput.cargoStatus : null),
+            cargoType: reportInput.reportType === 'departure' ? reportInput.cargoType : null,
+            // Set cargoStatus to null for berth, input for departure, null otherwise
+            cargoStatus: reportInput.reportType === 'departure' ? reportInput.cargoStatus : null,
             faspDate: reportInput.reportType === 'departure' ? reportInput.faspDate : null,
             faspTime: reportInput.reportType === 'departure' ? reportInput.faspTime : null,
-            faspLatitude: reportInput.reportType === 'departure' ? reportInput.faspLatitude : null,
-            faspLongitude: reportInput.reportType === 'departure' ? reportInput.faspLongitude : null,
+            faspLatDeg: reportInput.reportType === 'departure' ? reportInput.faspLatDeg : null,
+            faspLatMin: reportInput.reportType === 'departure' ? reportInput.faspLatMin : null,
+            faspLatDir: reportInput.reportType === 'departure' ? reportInput.faspLatDir : null,
+            faspLonDeg: reportInput.reportType === 'departure' ? reportInput.faspLonDeg : null,
+            faspLonMin: reportInput.reportType === 'departure' ? reportInput.faspLonMin : null,
+            faspLonDir: reportInput.reportType === 'departure' ? reportInput.faspLonDir : null,
             faspCourse: reportInput.reportType === 'departure' ? reportInput.faspCourse : null,
             harbourDistance: (reportInput.reportType === 'departure' || reportInput.reportType === 'arrival') ? reportInput.harbourDistance : null,
             harbourTime: (reportInput.reportType === 'departure' || reportInput.reportType === 'arrival') ? reportInput.harbourTime : null,
@@ -283,12 +378,13 @@ export const ReportService = {
             windForce: reportInput.windForce ?? null,
             seaState: reportInput.seaState ?? null,
             swellHeight: reportInput.swellHeight ?? null,
-            meConsumptionLsifo: reportInput.meConsumptionLsifo ?? null,
-            meConsumptionLsmgo: reportInput.meConsumptionLsmgo ?? null,
-            meConsumptionCylOil: reportInput.meConsumptionCylOil ?? null,
-            meConsumptionMeOil: reportInput.meConsumptionMeOil ?? null,
-            meConsumptionAeOil: reportInput.meConsumptionAeOil ?? null,
-            boilerConsumptionLsifo: reportInput.boilerConsumptionLsifo ?? null,
+            // Set ME/AE consumption to null for Berth reports
+            meConsumptionLsifo: reportInput.reportType === 'berth' ? null : (reportInput.meConsumptionLsifo ?? null),
+            meConsumptionLsmgo: reportInput.reportType === 'berth' ? null : (reportInput.meConsumptionLsmgo ?? null),
+            meConsumptionCylOil: reportInput.reportType === 'berth' ? null : (reportInput.meConsumptionCylOil ?? null),
+            meConsumptionMeOil: reportInput.reportType === 'berth' ? null : (reportInput.meConsumptionMeOil ?? null),
+            meConsumptionAeOil: reportInput.reportType === 'berth' ? null : (reportInput.meConsumptionAeOil ?? null),
+            boilerConsumptionLsifo: reportInput.boilerConsumptionLsifo ?? null, // Keep Boiler/Aux consumption as is for now
             boilerConsumptionLsmgo: reportInput.boilerConsumptionLsmgo ?? null,
             auxConsumptionLsifo: reportInput.auxConsumptionLsifo ?? null,
             auxConsumptionLsmgo: reportInput.auxConsumptionLsmgo ?? null,
@@ -297,17 +393,21 @@ export const ReportService = {
             supplyCylOil: reportInput.supplyCylOil ?? null,
             supplyMeOil: reportInput.supplyMeOil ?? null,
             supplyAeOil: reportInput.supplyAeOil ?? null,
-            meFoPressure: reportInput.meFoPressure ?? null,
-            meLubOilPressure: reportInput.meLubOilPressure ?? null,
-            meFwInletTemp: reportInput.meFwInletTemp ?? null,
-            meLoInletTemp: reportInput.meLoInletTemp ?? null,
-            meScavengeAirTemp: reportInput.meScavengeAirTemp ?? null,
-            meTcRpm1: reportInput.meTcRpm1 ?? null,
-            meTcRpm2: reportInput.meTcRpm2 ?? null,
-            meTcExhaustTempIn: reportInput.meTcExhaustTempIn ?? null,
-            meTcExhaustTempOut: reportInput.meTcExhaustTempOut ?? null,
-            meThrustBearingTemp: reportInput.meThrustBearingTemp ?? null,
-            meDailyRunHours: reportInput.meDailyRunHours ?? null,
+            // Set ME Params to null for Berth reports
+            meFoPressure: reportInput.reportType === 'berth' ? null : (reportInput.meFoPressure ?? null),
+            meLubOilPressure: reportInput.reportType === 'berth' ? null : (reportInput.meLubOilPressure ?? null),
+            meFwInletTemp: reportInput.reportType === 'berth' ? null : (reportInput.meFwInletTemp ?? null),
+            meLoInletTemp: reportInput.reportType === 'berth' ? null : (reportInput.meLoInletTemp ?? null),
+            meScavengeAirTemp: reportInput.reportType === 'berth' ? null : (reportInput.meScavengeAirTemp ?? null),
+            meTcRpm1: reportInput.reportType === 'berth' ? null : (reportInput.meTcRpm1 ?? null),
+            meTcRpm2: reportInput.reportType === 'berth' ? null : (reportInput.meTcRpm2 ?? null),
+            meTcExhaustTempIn: reportInput.reportType === 'berth' ? null : (reportInput.meTcExhaustTempIn ?? null),
+            meTcExhaustTempOut: reportInput.reportType === 'berth' ? null : (reportInput.meTcExhaustTempOut ?? null),
+            meThrustBearingTemp: reportInput.reportType === 'berth' ? null : (reportInput.meThrustBearingTemp ?? null),
+            meDailyRunHours: reportInput.reportType === 'berth' ? null : (reportInput.meDailyRunHours ?? null),
+            mePresentRpm: reportInput.reportType === 'berth' ? null : (reportInput.mePresentRpm ?? null),
+            meCurrentSpeed: reportInput.reportType === 'berth' ? null : (reportInput.meCurrentSpeed ?? null),
+            // Calculated consumptions should reflect the input (which might be null for ME/AE in Berth)
             totalConsumptionLsifo: totalConsumptions.totalConsumptionLsifo,
             totalConsumptionLsmgo: totalConsumptions.totalConsumptionLsmgo,
             totalConsumptionCylOil: totalConsumptions.totalConsumptionCylOil,
@@ -320,36 +420,63 @@ export const ReportService = {
             currentRobAeOil: currentRobs.currentRobAeOil,
             totalDistanceTravelled: calculatedTotalDistance,
             distanceToGo: calculatedDistanceToGo,
-            passageState: reportInput.reportType === 'noon' ? reportInput.passageState : null,
-            noonDate: reportInput.reportType === 'noon' && reportInput.passageState === 'NOON' ? reportInput.noonDate : null,
-            noonTime: reportInput.reportType === 'noon' && reportInput.passageState === 'NOON' ? reportInput.noonTime : null,
-            noonLatitude: reportInput.reportType === 'noon' && reportInput.passageState === 'NOON' ? reportInput.noonLatitude : null,
-            noonLongitude: reportInput.reportType === 'noon' && reportInput.passageState === 'NOON' ? reportInput.noonLongitude : null,
+            passageState: reportInput.reportType === 'noon' ? (reportInput.passageState || null) : null, // Store null if empty string
+            noonDate: reportInput.reportType === 'noon' ? reportInput.noonDate : null, // Always store noon details now
+            noonTime: reportInput.reportType === 'noon' ? reportInput.noonTime : null,
+            noonLatDeg: reportInput.reportType === 'noon' ? reportInput.noonLatDeg : null,
+            noonLatMin: reportInput.reportType === 'noon' ? reportInput.noonLatMin : null,
+            noonLatDir: reportInput.reportType === 'noon' ? reportInput.noonLatDir : null,
+            noonLonDeg: reportInput.reportType === 'noon' ? reportInput.noonLonDeg : null,
+            noonLonMin: reportInput.reportType === 'noon' ? reportInput.noonLonMin : null,
+            noonLonDir: reportInput.reportType === 'noon' ? reportInput.noonLonDir : null,
+            noonCourse: reportInput.reportType === 'noon' ? reportInput.noonCourse : null, // Added noonCourse
             sospDate: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospDate : null,
             sospTime: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospTime : null,
-            sospLatitude: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLatitude : null,
-            sospLongitude: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLongitude : null,
+            sospLatDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLatDeg : null,
+            sospLatMin: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLatMin : null,
+            sospLatDir: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLatDir : null,
+            sospLonDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonDeg : null,
+            sospLonMin: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonMin : null,
+            sospLonDir: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonDir : null,
+            sospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospCourse : null, // Added sospCourse
             rospDate: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospDate : null,
             rospTime: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospTime : null,
-            rospLatitude: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLatitude : null,
-            rospLongitude: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLongitude : null,
+            rospLatDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLatDeg : null,
+            rospLatMin: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLatMin : null,
+            rospLatDir: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLatDir : null,
+            rospLonDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonDeg : null,
+            rospLonMin: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonMin : null,
+            rospLonDir: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonDir : null,
+            rospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospCourse : null, // Added rospCourse
             eospDate: reportInput.reportType === 'arrival' ? reportInput.eospDate : null,
             eospTime: reportInput.reportType === 'arrival' ? reportInput.eospTime : null,
-            eospLatitude: reportInput.reportType === 'arrival' ? reportInput.eospLatitude : null,
-            eospLongitude: reportInput.reportType === 'arrival' ? reportInput.eospLongitude : null,
+            eospLatDeg: reportInput.reportType === 'arrival' ? reportInput.eospLatDeg : null,
+            eospLatMin: reportInput.reportType === 'arrival' ? reportInput.eospLatMin : null,
+            eospLatDir: reportInput.reportType === 'arrival' ? reportInput.eospLatDir : null,
+            eospLonDeg: reportInput.reportType === 'arrival' ? reportInput.eospLonDeg : null,
+            eospLonMin: reportInput.reportType === 'arrival' ? reportInput.eospLonMin : null,
+            eospLonDir: reportInput.reportType === 'arrival' ? reportInput.eospLonDir : null,
             eospCourse: reportInput.reportType === 'arrival' ? reportInput.eospCourse : null,
             estimatedBerthingDate: reportInput.reportType === 'arrival' ? reportInput.estimatedBerthingDate : null,
             estimatedBerthingTime: reportInput.reportType === 'arrival' ? reportInput.estimatedBerthingTime : null,
              berthDate: reportInput.reportType === 'berth' ? reportInput.berthDate : null,
              berthTime: reportInput.reportType === 'berth' ? reportInput.berthTime : null,
-             berthLatitude: reportInput.reportType === 'berth' ? reportInput.berthLatitude : null,
-             berthLongitude: reportInput.reportType === 'berth' ? reportInput.berthLongitude : null,
+             berthLatDeg: reportInput.reportType === 'berth' ? reportInput.berthLatDeg : null,
+             berthLatMin: reportInput.reportType === 'berth' ? reportInput.berthLatMin : null,
+             berthLatDir: reportInput.reportType === 'berth' ? reportInput.berthLatDir : null,
+             berthLonDeg: reportInput.reportType === 'berth' ? reportInput.berthLonDeg : null,
+             berthLonMin: reportInput.reportType === 'berth' ? reportInput.berthLonMin : null,
+             berthLonDir: reportInput.reportType === 'berth' ? reportInput.berthLonDir : null,
              cargoLoaded: reportInput.reportType === 'berth' ? (reportInput.cargoLoaded ?? null) : null,
              cargoUnloaded: reportInput.reportType === 'berth' ? (reportInput.cargoUnloaded ?? null) : null,
              cargoOpsStartDate: reportInput.reportType === 'berth' ? reportInput.cargoOpsStartDate : null,
              cargoOpsStartTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsStartTime : null,
              cargoOpsEndDate: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndDate : null,
              cargoOpsEndTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndTime : null,
+             berthNumber: reportInput.reportType === 'berth' ? reportInput.berthNumber : null, // Added berthNumber mapping
+             // Add calculated performance metrics
+             sailingTimeVoyage: calculatedSailingTimeVoyage,
+             avgSpeedVoyage: calculatedAvgSpeedVoyage,
              ...initialRobFieldsForRecord 
         };
 
@@ -369,13 +496,13 @@ export const ReportService = {
             // Insert the report record
             ReportModel._createReportRecord(fullReportRecordData); 
 
-            // Insert machinery data
-            if (reportInput.engineUnits?.length) { // Insert units
+            // Insert machinery data - Skip Engine Units for Berth reports
+            if (reportInput.reportType !== 'berth' && reportInput.engineUnits?.length) { // Insert units only if not Berth
                 if (!ReportEngineUnitModel.createMany(reportId, reportInput.engineUnits)) {
                     throw new Error("Failed to create engine units");
                 }
             }
-            if (reportInput.auxEngines?.length) { // Insert aux engines
+            if (reportInput.auxEngines?.length) { // Insert aux engines (still relevant for Berth)
                 if (!ReportAuxEngineModel.createMany(reportId, reportInput.auxEngines)) {
                     throw new Error("Failed to create aux engines");
                 }

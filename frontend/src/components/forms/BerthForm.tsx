@@ -3,21 +3,15 @@ import apiClient from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
 // Import necessary types including machinery
-import { BerthFormData, CardinalDirection, CurrentVoyageDetails, CargoStatus, EngineUnitData, AuxEngineData } from '../../types/report';
+import { BerthFormData, CardinalDirection, CurrentVoyageDetails, CargoStatus, AuxEngineData } from '../../types/report'; // Removed EngineUnitData
 import { useNavigate } from 'react-router-dom';
-import BunkerConsumptionSection from './sections/BunkerConsumptionSection';
+// Removed BunkerConsumptionSection, MachineryMEParamsSection, EngineUnitsSection imports
 import BunkerSupplySection from './sections/BunkerSupplySection';
-import MachineryMEParamsSection from './sections/MachineryMEParamsSection';
-import EngineUnitsSection from './sections/EngineUnitsSection';
 import AuxEnginesSection from './sections/AuxEnginesSection';
+import CoordinateInputGroup from './CoordinateInputGroup'; // Import the new component
 
 // Helper functions to initialize machinery data (copied from ArrivalForm)
-const initializeEngineUnits = (): EngineUnitData[] => {
-  return Array.from({ length: 8 }, (_, i) => ({
-    unitNumber: i + 1,
-    exhaustTemp: '', underPistonAir: '', pcoOutletTemp: '', jcfwOutletTemp: ''
-  }));
-};
+// Removed initializeEngineUnits function
 
 const initializeAuxEngines = (): AuxEngineData[] => {
   const names = ['DG1', 'DG2', 'V1'];
@@ -40,7 +34,10 @@ const BerthForm: React.FC = () => {
     reportTime: '',
     timeZone: '',
     // Berth Data
-    berthDate: '', berthTime: '', berthLatitude: '', berthLongitude: '',
+    berthDate: '', berthTime: '', 
+    berthLatDeg: '', berthLatMin: '', berthLatDir: 'N', // Replaced berthLatitude
+    berthLonDeg: '', berthLonMin: '', berthLonDir: 'E', // Replaced berthLongitude
+    berthNumber: '', // Added Berth Number
     // Cargo Ops Data
     cargoOpsStartDate: '', cargoOpsStartTime: '', cargoOpsEndDate: '', cargoOpsEndTime: '',
     cargoLoaded: '', // Conditional
@@ -48,17 +45,19 @@ const BerthForm: React.FC = () => {
     // Weather
     windDirection: 'N', seaDirection: 'N', swellDirection: 'N',
     windForce: '', seaState: '', swellHeight: '',
-    // Bunkers (Consumption)
-    meConsumptionLsifo: '', meConsumptionLsmgo: '', meConsumptionCylOil: '', meConsumptionMeOil: '', meConsumptionAeOil: '',
-    boilerConsumptionLsifo: '', boilerConsumptionLsmgo: '',
-    auxConsumptionLsifo: '', auxConsumptionLsmgo: '',
+    // Bunkers (Consumption) - REMOVED
+    // meConsumptionLsifo: '', meConsumptionLsmgo: '', meConsumptionCylOil: '', meConsumptionMeOil: '', meConsumptionAeOil: '',
+    boilerConsumptionLsifo: '', boilerConsumptionLsmgo: '', // Keep Boiler/Aux consumption for now, might be needed by Aux section? Revisit if Aux section needs update.
+    auxConsumptionLsifo: '', auxConsumptionLsmgo: '', // Keep Boiler/Aux consumption for now
     // Bunkers (Supply)
     supplyLsifo: '', supplyLsmgo: '', supplyCylOil: '', supplyMeOil: '', supplyAeOil: '',
-    // Machinery (ME Params) - Now required
-    meFoPressure: '', meLubOilPressure: '', meFwInletTemp: '', meLoInletTemp: '', meScavengeAirTemp: '',
-    meTcRpm1: '', meTcRpm2: '', meTcExhaustTempIn: '', meTcExhaustTempOut: '', meThrustBearingTemp: '', meDailyRunHours: '',
+    // Machinery (ME Params) - REMOVED
+    // meFoPressure: '', meLubOilPressure: '', meFwInletTemp: '', meLoInletTemp: '', meScavengeAirTemp: '',
+    // meTcRpm1: '', meTcRpm2: '', meTcExhaustTempIn: '', meTcExhaustTempOut: '', meThrustBearingTemp: '', meDailyRunHours: '',
+    // mePresentRpm: '',
+    // meCurrentSpeed: '',
     // Initialize machinery arrays
-    engineUnits: initializeEngineUnits(),
+    // engineUnits removed
     auxEngines: initializeAuxEngines(),
   });
   const [isLoading, setIsLoading] = useState(true); // Combined loading state
@@ -106,19 +105,30 @@ const BerthForm: React.FC = () => {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Handle direction selects specifically
+    if (name.endsWith('LatDir') || name.endsWith('LonDir')) {
+        setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Specific handlers for CoordinateInputGroup
+  const handleCoordinateChange = (
+    prefix: 'berthLat' | 'berthLon', 
+    part: 'Deg' | 'Min' | 'Dir', 
+    value: string
+  ) => {
+    const name = `${prefix}${part}`;
+    if (part === 'Dir') {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // Handlers for nested machinery data (copied from ArrivalForm)
-  const handleEngineUnitChange = (index: number, field: keyof Omit<EngineUnitData, 'unitNumber'>, value: string) => {
-     setFormData(prev => {
-      const updatedUnits = [...(prev.engineUnits || [])]; // Use initializers if needed
-      if (updatedUnits[index]) {
-        updatedUnits[index] = { ...updatedUnits[index], [field]: value };
-      }
-      return { ...prev, engineUnits: updatedUnits };
-    });
-  };
+  // handleEngineUnitChange removed
 
   const handleAuxEngineChange = (index: number, field: keyof Omit<AuxEngineData, 'engineName'>, value: string) => {
      setFormData(prev => {
@@ -141,23 +151,62 @@ const BerthForm: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    // Basic Client-side validation - Add required ME Params
-    const requiredFields: (keyof BerthFormData)[] = [
-        'reportDate', 'reportTime', 'timeZone', 'berthDate', 'berthTime', 'berthLatitude', 'berthLongitude',
-        'cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime',
-        // Add required ME Params
-        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
-        'meTcRpm1', /* meTcRpm2 is optional */ 'meTcExhaustTempIn', 'meTcExhaustTempOut', 
-        'meThrustBearingTemp', 'meDailyRunHours'
-        // Note: Bunkers consumption/supply are also required by BaseReportFormData
-        // Add them here for explicit validation if needed, or rely on backend
+    // --- Input Format Validation ---
+    const errors: string[] = [];
+    const numericFields: (keyof BerthFormData)[] = [ // Define list of numeric fields
+        'berthLatDeg', 'berthLatMin', 'berthLonDeg', 'berthLonMin', // Replaced Lat/Lon
+        'cargoLoaded', 'cargoUnloaded', // Conditional, validate if present
+        'windForce', 'seaState', 'swellHeight',
+        // ME Consumption removed
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo', // Keep Boiler/Aux consumption
+        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
+        // ME Params removed
     ];
-    // Conditional validation for cargo
-    if (voyageDetails.initialCargoStatus === 'Loaded') {
-        requiredFields.push('cargoUnloaded');
-    } else if (voyageDetails.initialCargoStatus === 'Empty') {
-        requiredFields.push('cargoLoaded');
+    // No string-only fields specific to Berth form
+
+    // Validate standard numeric fields
+    numericFields.forEach(field => {
+        const value = formData[field as keyof BerthFormData];
+        // Allow empty strings for optional fields (like meTcRpm2, cargoLoaded/Unloaded), but fail if non-empty and not numeric
+        if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+             // Special check for conditional cargo fields - only error if the state requires them
+            // Both fields are optional now, only validate if non-empty
+            errors.push(`${field} must be a valid number.`);
+        }
+    });
+
+    // Validate Engine Units (numeric) - REMOVED
+
+    // Validate Aux Engines (numeric)
+    formData.auxEngines?.forEach((aux, index) => {
+        Object.entries(aux).forEach(([key, value]) => {
+            if (key !== 'engineName' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Aux Engine ${aux.engineName} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    if (errors.length > 0) {
+        setError(errors.join(' '));
+        setIsLoading(false);
+        return;
     }
+    // --- End Input Format Validation ---
+
+
+    // Basic Client-side validation (Required Fields)
+    const requiredFields: (keyof BerthFormData)[] = [
+        'reportDate', 'reportTime', 'timeZone',
+        'berthDate', 'berthTime', 'berthNumber', // Added berthNumber
+        'berthLatDeg', 'berthLatMin', 'berthLatDir', // Replaced Lat/Lon
+        'berthLonDeg', 'berthLonMin', 'berthLonDir', // Replaced Lat/Lon
+        'cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime',
+        // Required ME Params removed
+        // Note: Bunkers consumption/supply are also required by BaseReportFormData
+        // Keep Boiler/Aux consumption required for now, rely on backend validation primarily
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo', // Explicitly add these? Or rely on backend? Let's rely on backend for now.
+        // Cargo loaded/unloaded are now optional from frontend perspective
+    ];
 
     for (const field of requiredFields) {
         // Check if the field exists in formData and is not empty/null/undefined
@@ -170,58 +219,37 @@ const BerthForm: React.FC = () => {
         }
     }
 
-    // Prepare payload: Convert numbers, remove irrelevant cargo field
-    const payload: any = { ...formData }; // Use 'any' temporarily for easier field deletion
+    // Prepare payload: Convert numbers
+    const payload: any = { ...formData }; 
 
-    // Remove the cargo field that is NOT applicable based on initial status
-    if (voyageDetails.initialCargoStatus === 'Loaded') {
-        delete payload.cargoLoaded; // Remove loaded field if initial was Loaded
-        if (payload.cargoUnloaded === '' || payload.cargoUnloaded === null || payload.cargoUnloaded === undefined) payload.cargoUnloaded = 0; // Default to 0 if empty
-    } else if (voyageDetails.initialCargoStatus === 'Empty') {
-        delete payload.cargoUnloaded; // Remove unloaded field if initial was Empty
-         if (payload.cargoLoaded === '' || payload.cargoLoaded === null || payload.cargoLoaded === undefined) payload.cargoLoaded = 0; // Default to 0 if empty
+    // Default empty cargo fields to 0 before numeric conversion
+    if (payload.cargoLoaded === '' || payload.cargoLoaded === null || payload.cargoLoaded === undefined) {
+        payload.cargoLoaded = 0;
+    }
+    if (payload.cargoUnloaded === '' || payload.cargoUnloaded === null || payload.cargoUnloaded === undefined) {
+        payload.cargoUnloaded = 0;
     }
 
-
-    const numericFields: (keyof BerthFormData)[] = [
-        'berthLatitude', 'berthLongitude', 'cargoLoaded', 'cargoUnloaded',
-        'windForce', 'seaState', 'swellHeight',
-        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
-        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
-        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
-        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
-        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours'
-    ];
-
+    // Use the *same* numericFields array defined above for conversion
     numericFields.forEach(field => {
         // Check if field exists in payload before processing (cargoLoaded/Unloaded might be deleted)
-        if (payload[field] !== undefined) {
-            if (payload[field] !== '' && payload[field] !== null) {
-                payload[field] = parseFloat(payload[field] as string);
-                 if (isNaN(payload[field])) {
-                     console.warn(`Could not parse numeric field: ${field}, value: ${formData[field]}`);
-                     payload[field] = null; 
+        // Use type assertion for safer access
+        const key = field as keyof BerthFormData; 
+        if (payload[key] !== undefined) {
+            if (payload[key] !== '' && payload[key] !== null) {
+                payload[key] = parseFloat(payload[key] as string);
+                 if (isNaN(payload[key])) {
+                     console.warn(`Could not parse numeric field: ${key}, value: ${formData[key]}`); // Log original value
+                     payload[key] = null; 
                 }
             } else {
-                 payload[field] = null; 
+                 payload[key] = null; 
             }
         }
     });
     
     // Convert machinery fields (copied from ArrivalForm)
-     payload.engineUnits = payload.engineUnits?.map((unit: EngineUnitData) => { // Add explicit type
-        const convertedUnit = { ...unit };
-        const unitNumericFields: (keyof Omit<EngineUnitData, 'unitNumber'>)[] = ['exhaustTemp', 'underPistonAir', 'pcoOutletTemp', 'jcfwOutletTemp'];
-        unitNumericFields.forEach(field => {
-            if (convertedUnit[field] !== '' && convertedUnit[field] !== undefined && convertedUnit[field] !== null) {
-                (convertedUnit as any)[field] = parseFloat(convertedUnit[field] as string);
-                 if (isNaN((convertedUnit as any)[field])) (convertedUnit as any)[field] = null;
-            } else {
-                 (convertedUnit as any)[field] = null;
-            }
-        });
-        return convertedUnit;
-    });
+     // payload.engineUnits conversion removed
      payload.auxEngines = payload.auxEngines?.map((aux: AuxEngineData) => { // Add explicit type
         const convertedAux = { ...aux };
         const auxNumericFields: (keyof Omit<AuxEngineData, 'engineName'>)[] = ['load', 'kw', 'foPress', 'lubOilPress', 'waterTemp', 'dailyRunHour'];
@@ -310,36 +338,63 @@ const BerthForm: React.FC = () => {
           {/* Berth Details Section */}
           <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
             <legend className="text-lg font-medium px-2">Berth Details</legend> {/* Consistent legend class */}
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* Consistent grid */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"> {/* Date/Time */}
                <div><label htmlFor="berthDate" className="block text-sm font-medium text-gray-700">Berth Date</label><input type="date" id="berthDate" name="berthDate" value={formData.berthDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div> {/* Consistent label/input */}
                <div><label htmlFor="berthTime" className="block text-sm font-medium text-gray-700">Berth Time</label><input type="time" id="berthTime" name="berthTime" value={formData.berthTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-               <div><label htmlFor="berthLatitude" className="block text-sm font-medium text-gray-700">Berth Latitude</label><input type="number" step="any" id="berthLatitude" name="berthLatitude" value={formData.berthLatitude} onChange={handleChange} required placeholder="e.g., 34.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-               <div><label htmlFor="berthLongitude" className="block text-sm font-medium text-gray-700">Berth Longitude</label><input type="number" step="any" id="berthLongitude" name="berthLongitude" value={formData.berthLongitude} onChange={handleChange} required placeholder="e.g., -118.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
+             </div>
+             {/* Replace Berth Lat/Lon inputs with CoordinateInputGroup */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <CoordinateInputGroup
+                    label="Berth Latitude"
+                    idPrefix="berthLat"
+                    degreeValue={formData.berthLatDeg ?? ''}
+                    minuteValue={formData.berthLatMin ?? ''}
+                    directionValue={formData.berthLatDir ?? 'N'}
+                    onDegreeChange={(e) => handleCoordinateChange('berthLat', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('berthLat', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('berthLat', 'Dir', e.target.value)}
+                    directionOptions={['N', 'S']}
+                    required={true}
+                 />
+                 <CoordinateInputGroup
+                    label="Berth Longitude"
+                    idPrefix="berthLon"
+                    degreeValue={formData.berthLonDeg ?? ''}
+                    minuteValue={formData.berthLonMin ?? ''}
+                    directionValue={formData.berthLonDir ?? 'E'}
+                    onDegreeChange={(e) => handleCoordinateChange('berthLon', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('berthLon', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('berthLon', 'Dir', e.target.value)}
+                    directionOptions={['E', 'W']}
+                    required={true}
+                 />
+             </div>
+             {/* Add Berth Number Input */}
+             <div className="mt-4">
+                <label htmlFor="berthNumber" className="block text-sm font-medium text-gray-700">Berth Number</label>
+                <input type="text" id="berthNumber" name="berthNumber" value={formData.berthNumber} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
              </div>
           </fieldset>
 
           {/* Cargo Operations Section */}
           <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
             <legend className="text-lg font-medium px-2">Cargo Operations</legend> {/* Consistent legend class */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> {/* Consistent grid */}
-                {/* Conditional Cargo Field */}
-                {voyageDetails?.initialCargoStatus === 'Loaded' && (
-                     <div>
-                        <label htmlFor="cargoUnloaded" className="block text-sm font-medium text-gray-700">Cargo Unloaded (MT)</label>
-                        <input type="number" step="0.01" id="cargoUnloaded" name="cargoUnloaded" value={formData.cargoUnloaded ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
-                    </div>
-                )}
-                 {voyageDetails?.initialCargoStatus === 'Empty' && (
-                     <div>
-                        <label htmlFor="cargoLoaded" className="block text-sm font-medium text-gray-700">Cargo Loaded (MT)</label>
-                        <input type="number" step="0.01" id="cargoLoaded" name="cargoLoaded" value={formData.cargoLoaded ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
-                    </div>
-                )}
-                 {/* Spacer if only one cargo field shown */}
-                 {voyageDetails?.initialCargoStatus && <div className="hidden md:block"></div>} 
-                 {voyageDetails?.initialCargoStatus && <div className="hidden md:block"></div>} 
-
-                 {/* Cargo Ops Times */}
+             {/* Always show both cargo fields, adjust grid */}
+             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"> {/* Use 4 columns for cargo + dates */}
+                 {/* Cargo Loaded */}
+                 <div>
+                    <label htmlFor="cargoLoaded" className="block text-sm font-medium text-gray-700">Cargo Loaded (MT)</label>
+                    <input type="number" step="0.01" id="cargoLoaded" name="cargoLoaded" value={formData.cargoLoaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Removed required */}
+                </div>
+                 {/* Cargo Unloaded */}
+                 <div>
+                    <label htmlFor="cargoUnloaded" className="block text-sm font-medium text-gray-700">Cargo Unloaded (MT)</label>
+                    <input type="number" step="0.01" id="cargoUnloaded" name="cargoUnloaded" value={formData.cargoUnloaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Removed required */}
+                </div>
+                 {/* Cargo Ops Times - moved to next row or adjust grid */}
+                 {/* Let's keep times below for clarity */}
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* New grid for times */}
                  <div><label htmlFor="cargoOpsStartDate" className="block text-sm font-medium text-gray-700">Ops Start Date</label><input type="date" id="cargoOpsStartDate" name="cargoOpsStartDate" value={formData.cargoOpsStartDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
                  <div><label htmlFor="cargoOpsStartTime" className="block text-sm font-medium text-gray-700">Ops Start Time</label><input type="time" id="cargoOpsStartTime" name="cargoOpsStartTime" value={formData.cargoOpsStartTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
                  <div><label htmlFor="cargoOpsEndDate" className="block text-sm font-medium text-gray-700">Ops End Date</label><input type="date" id="cargoOpsEndDate" name="cargoOpsEndDate" value={formData.cargoOpsEndDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
@@ -368,11 +423,7 @@ const BerthForm: React.FC = () => {
 
           <fieldset className="border p-4 rounded">
             <legend className="text-lg font-medium px-2">Bunkers</legend>
-            <BunkerConsumptionSection
-              formData={formData}
-              handleChange={handleChange}
-              title="Consumption (24h)"
-            />
+            {/* BunkerConsumptionSection removed */}
             <BunkerSupplySection
               formData={formData}
               handleChange={handleChange}
@@ -382,16 +433,8 @@ const BerthForm: React.FC = () => {
 
           <fieldset className="border p-4 rounded">
             <legend className="text-lg font-medium px-2">Machinery</legend>
-            <MachineryMEParamsSection
-              formData={formData}
-              handleChange={handleChange}
-              isTcRpm2Optional={true} // TC#2 is optional in Berth form
-              includeDailyRunHours={true} // Berth form includes daily run hours
-            />
-            <EngineUnitsSection
-              engineUnits={formData.engineUnits || []}
-              handleEngineUnitChange={handleEngineUnitChange}
-            />
+            {/* MachineryMEParamsSection removed */}
+            {/* EngineUnitsSection removed */}
             <AuxEnginesSection
               auxEngines={formData.auxEngines || []}
               handleAuxEngineChange={handleAuxEngineChange}

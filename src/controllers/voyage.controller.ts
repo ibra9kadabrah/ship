@@ -37,13 +37,25 @@ export const getCurrentVoyageDetails = async (req: Request, res: Response, next:
             return res.status(500).json({ message: 'Internal server error: Could not retrieve initial voyage details.' });
         }
 
-        // 4. Construct and send the response
+        // 4. Fetch the latest approved report for progress data
+        const latestApprovedReport = await ReportModel.getLatestApprovedReportForVoyage(activeVoyage.id);
+
+        // 5. Construct and send the response
         const voyageDetails = {
+            vesselName: vessel.name,
+            vesselImoNumber: vessel.imoNumber,
+            vesselDeadweight: vessel.deadweight,
             voyageId: activeVoyage.id,
             departurePort: activeVoyage.departurePort,
             destinationPort: activeVoyage.destinationPort,
-            // Ensure cargoStatus exists on the departure report type
-            initialCargoStatus: (departureReport as any).cargoStatus, // Cast needed if BaseReport doesn't include it directly
+            voyageDistance: activeVoyage.voyageDistance, // Add total voyage distance
+            actualDepartureDate: (departureReport as any).reportDate, // Add ATD Date
+            actualDepartureTime: (departureReport as any).reportTime, // Add ATD Time
+            etaDate: (departureReport as any).etaDate, // Get ETA from Departure Report
+            etaTime: (departureReport as any).etaTime, // Get ETA from Departure Report
+            initialCargoStatus: (departureReport as any).cargoStatus,
+            totalDistanceTravelled: latestApprovedReport?.totalDistanceTravelled ?? 0,
+            distanceToGo: latestApprovedReport?.distanceToGo ?? activeVoyage.voyageDistance, // Default to full distance if no progress
         };
 
         res.status(200).json(voyageDetails);

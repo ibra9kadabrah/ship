@@ -61,7 +61,15 @@ const PendingReportsList: React.FC = () => {
               {pendingReports.map((report) => (
                 <tr key={report.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{report.id.substring(0, 8)}...</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{report.reportType}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                    {report.reportType}
+                    {/* Conditionally display course for Noon reports */}
+                    {report.reportType === 'noon' && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        (Course: {report.noonCourse ?? report.sospCourse ?? report.rospCourse ?? 'N/A'}°)
+                      </span>
+                    )}
+                  </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                      {report.reportDate} {report.reportTime} 
                   </td>

@@ -9,6 +9,7 @@ import BunkerSupplySection from './sections/BunkerSupplySection';
 import MachineryMEParamsSection from './sections/MachineryMEParamsSection';
 import EngineUnitsSection from './sections/EngineUnitsSection';
 import AuxEnginesSection from './sections/AuxEnginesSection';
+import CoordinateInputGroup from './CoordinateInputGroup'; // Import the new component
 
 // Helper functions to initialize machinery data (can be moved to a shared utils file later)
 const initializeEngineUnits = (): EngineUnitData[] => {
@@ -37,7 +38,10 @@ const ArrivalForm: React.FC = () => {
     reportTime: '',
     timeZone: '',
     // EOSP Data
-    eospDate: '', eospTime: '', eospLatitude: '', eospLongitude: '', eospCourse: '',
+    eospDate: '', eospTime: '', 
+    eospLatDeg: '', eospLatMin: '', eospLatDir: 'N', // Replaced eospLatitude
+    eospLonDeg: '', eospLonMin: '', eospLonDir: 'E', // Replaced eospLongitude
+    eospCourse: '',
     // Distance Data
     distanceSinceLastReport: '', harbourDistance: '', harbourTime: '',
     // Estimated Berthing
@@ -54,6 +58,8 @@ const ArrivalForm: React.FC = () => {
     // Machinery (ME Params)
     meFoPressure: '', meLubOilPressure: '', meFwInletTemp: '', meLoInletTemp: '', meScavengeAirTemp: '',
     meTcRpm1: '', meTcRpm2: '', meTcExhaustTempIn: '', meTcExhaustTempOut: '', meThrustBearingTemp: '', meDailyRunHours: '',
+    mePresentRpm: '', // Added mePresentRpm
+    meCurrentSpeed: '', // Added Current Speed
     // Machinery (Units/Aux)
     engineUnits: initializeEngineUnits(),
     auxEngines: initializeAuxEngines(),
@@ -84,7 +90,26 @@ const ArrivalForm: React.FC = () => {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Handle direction selects specifically
+    if (name.endsWith('LatDir') || name.endsWith('LonDir')) {
+        setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Specific handlers for CoordinateInputGroup
+  const handleCoordinateChange = (
+    prefix: 'eospLat' | 'eospLon', 
+    part: 'Deg' | 'Min' | 'Dir', 
+    value: string
+  ) => {
+    const name = `${prefix}${part}`;
+    if (part === 'Dir') {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // Handlers for nested machinery data
@@ -114,10 +139,64 @@ const ArrivalForm: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    // Basic Client-side validation
+    // --- Input Format Validation ---
+    const errors: string[] = [];
+    const numericFields: (keyof ArrivalFormData)[] = [ // Define numeric fields for validation
+        'eospLatDeg', 'eospLatMin', 'eospLonDeg', 'eospLonMin', // Replaced Lat/Lon
+        'eospCourse', 'distanceSinceLastReport', 'harbourDistance',
+        'windForce', 'seaState', 'swellHeight',
+        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
+        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
+        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed' // Added mePresentRpm, meCurrentSpeed
+    ];
+    // No string-only fields specific to Arrival form to validate here
+
+    // Validate standard numeric fields
+    numericFields.forEach(field => {
+        const value = formData[field as keyof ArrivalFormData];
+        // Allow empty strings for optional fields (like meTcRpm2), but fail if non-empty and not numeric
+        if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+            errors.push(`${field} must be a valid number.`);
+        }
+    });
+
+    // Validate Engine Units (numeric)
+    formData.engineUnits?.forEach((unit, index) => {
+        Object.entries(unit).forEach(([key, value]) => {
+            if (key !== 'unitNumber' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Engine Unit #${unit.unitNumber} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    // Validate Aux Engines (numeric)
+    formData.auxEngines?.forEach((aux, index) => {
+        Object.entries(aux).forEach(([key, value]) => {
+            if (key !== 'engineName' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Aux Engine ${aux.engineName} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    if (errors.length > 0) {
+        setError(errors.join(' '));
+        setIsLoading(false);
+        return;
+    }
+    // --- End Input Format Validation ---
+
+
+    // Basic Client-side validation (Required Fields)
     const requiredFields: (keyof ArrivalFormData)[] = [
-        'reportDate', 'reportTime', 'timeZone', 'eospDate', 'eospTime', 'eospLatitude', 'eospLongitude', 'eospCourse',
-        'distanceSinceLastReport', 'harbourDistance', 'harbourTime', 'estimatedBerthingDate', 'estimatedBerthingTime'
+        'reportDate', 'reportTime', 'timeZone', 
+        'eospDate', 'eospTime', 
+        'eospLatDeg', 'eospLatMin', 'eospLatDir', // Replaced Lat/Lon
+        'eospLonDeg', 'eospLonMin', 'eospLonDir', // Replaced Lat/Lon
+        'eospCourse',
+        'distanceSinceLastReport', 'harbourDistance', 'harbourTime', 'estimatedBerthingDate', 'estimatedBerthingTime',
+        'mePresentRpm', 'meCurrentSpeed' // Added mePresentRpm, meCurrentSpeed
     ];
     for (const field of requiredFields) {
         if (!formData[field]) {
@@ -136,25 +215,17 @@ const ArrivalForm: React.FC = () => {
 
     // Prepare payload: Convert numbers
     const payload = { ...formData };
-    const numericFields: (keyof ArrivalFormData)[] = [
-        'eospLatitude', 'eospLongitude', 'eospCourse', 'distanceSinceLastReport', 'harbourDistance',
-        'windForce', 'seaState', 'swellHeight',
-        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
-        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
-        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
-        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
-        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours'
-    ];
-
+    // Use the *same* numericFields array defined above for conversion
     numericFields.forEach(field => {
-        if (payload[field] !== '' && payload[field] !== undefined && payload[field] !== null) {
-            (payload as any)[field] = parseFloat(payload[field] as string);
-             if (isNaN((payload as any)[field])) {
-                 console.warn(`Could not parse numeric field: ${field}, value: ${payload[field]}`);
-                 (payload as any)[field] = null; 
+        const key = field as keyof ArrivalFormData; // Use type assertion
+        if (payload[key] !== '' && payload[key] !== undefined && payload[key] !== null) {
+            (payload as any)[key] = parseFloat(payload[key] as string);
+             if (isNaN((payload as any)[key])) {
+                 console.warn(`Could not parse numeric field: ${key}, value: ${formData[key]}`); // Log original value
+                 (payload as any)[key] = null; 
             }
         } else {
-             (payload as any)[field] = null; 
+             (payload as any)[key] = null; 
         }
     });
     
@@ -252,13 +323,32 @@ const ArrivalForm: React.FC = () => {
                 <label htmlFor="eospTime" className="block text-sm font-medium text-gray-700">EOSP Time</label>
                 <input type="time" id="eospTime" name="eospTime" value={formData.eospTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
             </div>
-             <div>
-                <label htmlFor="eospLatitude" className="block text-sm font-medium text-gray-700">EOSP Latitude</label>
-                <input type="number" step="any" id="eospLatitude" name="eospLatitude" value={formData.eospLatitude} onChange={handleChange} required placeholder="e.g., 34.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
-            </div>
-             <div>
-                <label htmlFor="eospLongitude" className="block text-sm font-medium text-gray-700">EOSP Longitude</label>
-                <input type="number" step="any" id="eospLongitude" name="eospLongitude" value={formData.eospLongitude} onChange={handleChange} required placeholder="e.g., -118.12345" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            {/* Replace EOSP Lat/Lon inputs with CoordinateInputGroup */}
+            <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <CoordinateInputGroup
+                    label="EOSP Latitude"
+                    idPrefix="eospLat"
+                    degreeValue={formData.eospLatDeg ?? ''}
+                    minuteValue={formData.eospLatMin ?? ''}
+                    directionValue={formData.eospLatDir ?? 'N'}
+                    onDegreeChange={(e) => handleCoordinateChange('eospLat', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('eospLat', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('eospLat', 'Dir', e.target.value)}
+                    directionOptions={['N', 'S']}
+                    required={true}
+                 />
+                 <CoordinateInputGroup
+                    label="EOSP Longitude"
+                    idPrefix="eospLon"
+                    degreeValue={formData.eospLonDeg ?? ''}
+                    minuteValue={formData.eospLonMin ?? ''}
+                    directionValue={formData.eospLonDir ?? 'E'}
+                    onDegreeChange={(e) => handleCoordinateChange('eospLon', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('eospLon', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('eospLon', 'Dir', e.target.value)}
+                    directionOptions={['E', 'W']}
+                    required={true}
+                 />
             </div>
              <div>
                 <label htmlFor="eospCourse" className="block text-sm font-medium text-gray-700">EOSP Course (°)</label>
@@ -346,14 +436,14 @@ const ArrivalForm: React.FC = () => {
 
         {/* Bunkers Section */}
         <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
-        <fieldset className="border p-4 rounded">
-          <legend className="text-lg font-medium px-2">Bunkers</legend>
-          <BunkerConsumptionSection
-            formData={formData}
-            handleChange={handleChange}
-            title="Consumption (24h)"
-          />
-          <BunkerSupplySection
+          {/* Removed extra nested fieldset here */}
+            <legend className="text-lg font-medium px-2">Bunkers</legend>
+            <BunkerConsumptionSection
+              formData={formData}
+              handleChange={handleChange}
+              // title prop removed
+            />
+            <BunkerSupplySection
             formData={formData}
             handleChange={handleChange}
             title="Supply (Since Last)"

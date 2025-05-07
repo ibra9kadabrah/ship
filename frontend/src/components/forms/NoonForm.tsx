@@ -9,6 +9,7 @@ import BunkerSupplySection from './sections/BunkerSupplySection';
 import MachineryMEParamsSection from './sections/MachineryMEParamsSection';
 import EngineUnitsSection from './sections/EngineUnitsSection';
 import AuxEnginesSection from './sections/AuxEnginesSection';
+import CoordinateInputGroup from './CoordinateInputGroup'; // Import the new component
 
 // Helper function to initialize machinery data (similar to DepartureForm)
 const initializeEngineUnits = (): EngineUnitData[] => {
@@ -30,19 +31,36 @@ const NoonForm: React.FC = () => {
   const { user } = useAuth(); // Use the useAuth hook
   const navigate = useNavigate();
   const [vesselInfo, setVesselInfo] = useState<VesselInfo | null>(null);
-  const [formData, setFormData] = useState<NoonFormData>({
+  // Add state for previous noon report's passage state
+  const [prevNoonState, setPrevNoonState] = useState<PassageState | null>(null); 
+  const [formData, setFormData] = useState<Partial<NoonFormData>>({ // Use Partial for initial state
     reportType: 'noon',
     vesselId: '', // Will be set after fetching vessel info
     reportDate: '',
     reportTime: '',
     timeZone: '',
-    // Passage State
-    passageState: 'NOON', // Default state
+    // Passage State - Default to empty string, make optional
+    passageState: '', 
     distanceSinceLastReport: '',
+    // Noon fields are now always required
+    noonDate: '', 
+    noonTime: '', 
+    noonLatDeg: '', // Replaced noonLatitude
+    noonLatMin: '', // Replaced noonLatitude
+    noonLatDir: 'N', // Replaced noonLatitude (default N)
+    noonLonDeg: '', // Replaced noonLongitude
+    noonLonMin: '', // Replaced noonLongitude
+    noonLonDir: 'E', // Replaced noonLongitude (default E)
+    noonCourse: '', // Added noonCourse
     // Conditional fields (initialize all, rely on validation/filtering later)
-    noonDate: '', noonTime: '', noonLatitude: '', noonLongitude: '',
-    sospDate: '', sospTime: '', sospLatitude: '', sospLongitude: '',
-    rospDate: '', rospTime: '', rospLatitude: '', rospLongitude: '',
+    sospDate: '', sospTime: '', 
+    sospLatDeg: '', sospLatMin: '', sospLatDir: 'N', // Replaced sospLatitude
+    sospLonDeg: '', sospLonMin: '', sospLonDir: 'E', // Replaced sospLongitude
+    sospCourse: '', // Added sospCourse
+    rospDate: '', rospTime: '', 
+    rospLatDeg: '', rospLatMin: '', rospLatDir: 'N', // Replaced rospLatitude
+    rospLonDeg: '', rospLonMin: '', rospLonDir: 'E', // Replaced rospLongitude
+    rospCourse: '', // Added rospCourse
     // Weather
     windDirection: 'N', seaDirection: 'N', swellDirection: 'N',
     windForce: '', seaState: '', swellHeight: '',
@@ -55,6 +73,8 @@ const NoonForm: React.FC = () => {
     // Machinery (ME Params)
     meFoPressure: '', meLubOilPressure: '', meFwInletTemp: '', meLoInletTemp: '', meScavengeAirTemp: '',
     meTcRpm1: '', meTcRpm2: '', meTcExhaustTempIn: '', meTcExhaustTempOut: '', meThrustBearingTemp: '', meDailyRunHours: '',
+    mePresentRpm: '', // Added mePresentRpm
+    meCurrentSpeed: '', // Added Current Speed
     // Machinery (Units/Aux)
     engineUnits: initializeEngineUnits(),
     auxEngines: initializeAuxEngines(),
@@ -63,16 +83,18 @@ const NoonForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch vessel info
+  // Fetch vessel info (assuming backend now includes previousNoonPassageState)
   useEffect(() => {
     const fetchVesselInfo = async () => {
       setIsLoading(true);
       setError(null); // Reset error before fetching
       try {
-        // Corrected path: remove '/api' prefix as it's in baseURL
         const response = await apiClient.get<VesselInfo>('/vessels/my-vessel'); 
-        setVesselInfo(response.data);
-        setFormData(prev => ({ ...prev, vesselId: response.data.id })); // Set vesselId in form data
+        const fetchedData = response.data;
+        setVesselInfo(fetchedData);
+        setFormData(prev => ({ ...prev, vesselId: fetchedData.id })); 
+        // Set the previous noon state from fetched data
+        setPrevNoonState(fetchedData.previousNoonPassageState ?? null); 
       } catch (err) {
         setError('Failed to fetch vessel information.');
         console.error(err);
@@ -85,7 +107,26 @@ const NoonForm: React.FC = () => {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Handle direction selects specifically
+    if (name.endsWith('LatDir') || name.endsWith('LonDir')) {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Specific handlers for CoordinateInputGroup
+  const handleCoordinateChange = (
+    prefix: 'noonLat' | 'noonLon' | 'sospLat' | 'sospLon' | 'rospLat' | 'rospLon', 
+    part: 'Deg' | 'Min' | 'Dir', 
+    value: string
+  ) => {
+    const name = `${prefix}${part}`;
+    if (part === 'Dir') {
+      setFormData(prev => ({ ...prev, [name]: value as 'N' | 'S' | 'E' | 'W' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // Handlers for nested machinery data (similar to DepartureForm)
@@ -116,63 +157,147 @@ const NoonForm: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    // Basic Client-side validation (can be expanded)
-    if (!formData.reportDate || !formData.reportTime || !formData.distanceSinceLastReport) {
-        setError('Report Date, Time, and Distance Since Last are required.');
-        setIsLoading(false);
-        return;
-    }
-    // Add validation for conditional fields based on passageState
-    if (formData.passageState === 'NOON' && (!formData.noonDate || !formData.noonTime || !formData.noonLatitude || !formData.noonLongitude)) {
-         setError('Noon Date, Time, Latitude, and Longitude are required for NOON state.');
-         setIsLoading(false);
-         return;
-    }
-     if (formData.passageState === 'SOSP' && (!formData.sospDate || !formData.sospTime || !formData.sospLatitude || !formData.sospLongitude)) {
-         setError('SOSP Date, Time, Latitude, and Longitude are required for SOSP state.');
-         setIsLoading(false);
-         return;
-    }
-     if (formData.passageState === 'ROSP' && (!formData.rospDate || !formData.rospTime || !formData.rospLatitude || !formData.rospLongitude)) {
-         setError('ROSP Date, Time, Latitude, and Longitude are required for ROSP state.');
-         setIsLoading(false);
-         return;
-    }
-
-    // Prepare payload: Convert numbers, filter conditional fields
-    const payload = { ...formData };
-    const numericFields: (keyof NoonFormData)[] = [
+    // --- Input Format Validation ---
+    const errors: string[] = [];
+    const numericFields: (keyof NoonFormData)[] = [ // Use Partial<> for formData access
         'distanceSinceLastReport', 'windForce', 'seaState', 'swellHeight',
+        'noonLatDeg', 'noonLatMin', 'noonLonDeg', 'noonLonMin', 'noonCourse', // Always validate noon numerics
+        'sospLatDeg', 'sospLatMin', 'sospLonDeg', 'sospLonMin', 'sospCourse', // Conditional, validate if present
+        'rospLatDeg', 'rospLatMin', 'rospLonDeg', 'rospLonMin', 'rospCourse', // Conditional, validate if present
         'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
         'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
         'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
         'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
-        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours',
-        'noonLatitude', 'noonLongitude', 'sospLatitude', 'sospLongitude', 'rospLatitude', 'rospLongitude'
+        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed' // Added mePresentRpm, meCurrentSpeed
     ];
 
+    // Validate standard numeric fields
     numericFields.forEach(field => {
-        if (payload[field] !== '' && payload[field] !== undefined && payload[field] !== null) {
-            (payload as any)[field] = parseFloat(payload[field] as string);
-            if (isNaN((payload as any)[field])) {
-                 // Handle potential NaN if input is not a valid number
-                 console.warn(`Could not parse numeric field: ${field}, value: ${payload[field]}`);
-                 (payload as any)[field] = null; // Or handle error appropriately
+        const value = formData[field as keyof NoonFormData];
+        // Allow empty strings for optional fields (like meTcRpm2), but fail if non-empty and not numeric
+        if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+            // Special check for conditional SOSP/ROSP fields - only error if the state requires them
+            let isRequiredByState = true;
+            if (field.startsWith('sosp') && formData.passageState !== 'SOSP') isRequiredByState = false;
+            if (field.startsWith('rosp') && formData.passageState !== 'ROSP') isRequiredByState = false;
+            
+            if (isRequiredByState) {
+                errors.push(`${field} must be a valid number.`);
             }
-        } else {
-             (payload as any)[field] = null; // Set to null if empty or undefined
         }
     });
 
-    // Filter out irrelevant conditional fields
-    if (payload.passageState !== 'NOON') {
-        delete payload.noonDate; delete payload.noonTime; delete payload.noonLatitude; delete payload.noonLongitude;
+    // Validate Engine Units (numeric)
+    formData.engineUnits?.forEach((unit, index) => {
+        Object.entries(unit).forEach(([key, value]) => {
+            if (key !== 'unitNumber' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Engine Unit #${unit.unitNumber} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    // Validate Aux Engines (numeric)
+    formData.auxEngines?.forEach((aux, index) => {
+        Object.entries(aux).forEach(([key, value]) => {
+            if (key !== 'engineName' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+                errors.push(`Aux Engine ${aux.engineName} ${key} must be a valid number.`);
+            }
+        });
+    });
+
+    if (errors.length > 0) {
+        setError(errors.join(' '));
+        setIsLoading(false);
+        return;
     }
+    // --- End Input Format Validation ---
+
+
+    // --- Required Fields & State Logic Validation ---
+    // Always required fields
+    const alwaysRequiredFields: (keyof NoonFormData)[] = [
+        'reportDate', 'reportTime', 'timeZone', 'distanceSinceLastReport',
+        'noonDate', 'noonTime', 
+        'noonLatDeg', 'noonLatMin', 'noonLatDir', // Noon coords always required
+        'noonLonDeg', 'noonLonMin', 'noonLonDir', // Noon coords always required
+        'noonCourse', 'mePresentRpm', 'meCurrentSpeed' // Added mePresentRpm, meCurrentSpeed
+    ];
+    for (const field of alwaysRequiredFields) {
+        if (!formData[field]) {
+            setError(`Field "${field}" is required.`);
+            setIsLoading(false);
+            return;
+        }
+    }
+
+    // Conditional SOSP/ROSP fields validation (including course and Deg/Min/Dir)
+    if (formData.passageState === 'SOSP' && (
+        !formData.sospDate || !formData.sospTime || 
+        !formData.sospLatDeg || !formData.sospLatMin || !formData.sospLatDir ||
+        !formData.sospLonDeg || !formData.sospLonMin || !formData.sospLonDir ||
+        !formData.sospCourse
+    )) {
+         setError('SOSP Date, Time, Latitude (Deg/Min/Dir), Longitude (Deg/Min/Dir), and Course are required when SOSP state is selected.');
+         setIsLoading(false);
+         return;
+    }
+     if (formData.passageState === 'ROSP' && (
+        !formData.rospDate || !formData.rospTime || 
+        !formData.rospLatDeg || !formData.rospLatMin || !formData.rospLatDir ||
+        !formData.rospLonDeg || !formData.rospLonMin || !formData.rospLonDir ||
+        !formData.rospCourse
+     )) {
+         setError('ROSP Date, Time, Latitude (Deg/Min/Dir), Longitude (Deg/Min/Dir), and Course are required when ROSP state is selected.');
+         setIsLoading(false);
+         return;
+    }
+
+    // Passage State Sequence Validation
+    if (prevNoonState === 'SOSP' && !formData.passageState) { // Must select SOSP or ROSP if previous was SOSP
+        setError('Passage state (SOSP/ROSP) is required because the previous Noon report was SOSP.');
+        setIsLoading(false);
+        return;
+    }
+    if (prevNoonState !== 'SOSP' && formData.passageState === 'ROSP') { // Cannot select ROSP if previous was not SOSP
+        setError('ROSP state is only allowed immediately following an SOSP state.');
+        setIsLoading(false);
+        return;
+    }
+    // --- End Required Fields & State Logic Validation ---
+
+
+    // Prepare payload: Convert numbers, filter conditional fields
+    const payload = { ...formData };
+    // Use the *same* numericFields array defined above for conversion
+    numericFields.forEach(field => {
+        const key = field as keyof NoonFormData; // Use type assertion
+        if (payload[key] !== '' && payload[key] !== undefined && payload[key] !== null) {
+            (payload as any)[key] = parseFloat(payload[key] as string);
+            if (isNaN((payload as any)[key])) {
+                 console.warn(`Could not parse numeric field: ${key}, value: ${formData[key]}`); // Log original value
+                 (payload as any)[key] = null; 
+            }
+        } else {
+             (payload as any)[key] = null; 
+        }
+    });
+
+    // Filter out irrelevant conditional fields (including course and Deg/Min/Dir)
     if (payload.passageState !== 'SOSP') {
-        delete payload.sospDate; delete payload.sospTime; delete payload.sospLatitude; delete payload.sospLongitude;
+        delete payload.sospDate; delete payload.sospTime; 
+        delete payload.sospLatDeg; delete payload.sospLatMin; delete payload.sospLatDir;
+        delete payload.sospLonDeg; delete payload.sospLonMin; delete payload.sospLonDir;
+        delete payload.sospCourse;
     }
     if (payload.passageState !== 'ROSP') {
-        delete payload.rospDate; delete payload.rospTime; delete payload.rospLatitude; delete payload.rospLongitude;
+        delete payload.rospDate; delete payload.rospTime; 
+        delete payload.rospLatDeg; delete payload.rospLatMin; delete payload.rospLatDir;
+        delete payload.rospLonDeg; delete payload.rospLonMin; delete payload.rospLonDir;
+        delete payload.rospCourse;
+     }
+    // Convert empty passageState to null for backend
+    if (payload.passageState === '') {
+        payload.passageState = null;
     }
     
     // Convert machinery fields (similar logic as numericFields)
@@ -205,11 +330,8 @@ const NoonForm: React.FC = () => {
 
 
     try {
-      // Corrected path: remove '/api' prefix as it's handled by baseURL
-      await apiClient.post('/reports', payload); 
+      await apiClient.post('/reports', payload as NoonFormData); // Use correct type
       setSuccess('Noon report submitted successfully!');
-      // Optionally reset form or navigate away
-      // setFormData({ ...initial state... }); // Reset form
       setTimeout(() => navigate('/captain'), 1500); // Navigate back to dashboard after delay
     } catch (err: any) {
       console.error('Submission error:', err);
@@ -234,124 +356,155 @@ const NoonForm: React.FC = () => {
   };
 
   return (
-    // Removed outer div max-w-4xl mx-auto p-4 as layout likely handles it
     <> 
-      <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Noon Report</h2> {/* Match DepartureForm h2 */}
+      <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Noon Report</h2> 
       {renderVesselInfo()}
 
-      {/* Apply consistent form styling */}
-      <form onSubmit={handleSubmit} className="space-y-6 p-4 bg-white rounded shadow-md"> {/* Consistent form class */}
+      <form onSubmit={handleSubmit} className="space-y-6 p-4 bg-white rounded shadow-md"> 
         {/* General Information Section */}
-        <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
-          <legend className="text-lg font-medium px-2">General Info</legend> {/* Consistent legend class & text */}
-          {/* Inputs for reportDate, reportTime, timeZone */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> {/* Consistent grid */}
+        <fieldset className="border p-4 rounded"> 
+          <legend className="text-lg font-medium px-2">General Info</legend> 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> 
              <div>
-                <label htmlFor="reportDate" className="block text-sm font-medium text-gray-700">Report Date</label> {/* Consistent label */}
-                {/* Apply consistent input styling */}
+                <label htmlFor="reportDate" className="block text-sm font-medium text-gray-700">Report Date</label> 
                 <input type="date" id="reportDate" name="reportDate" value={formData.reportDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
             </div>
              <div>
                 <label htmlFor="reportTime" className="block text-sm font-medium text-gray-700">Report Time</label>
-                {/* Apply consistent input styling */}
                 <input type="time" id="reportTime" name="reportTime" value={formData.reportTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
             </div>
              <div>
                 <label htmlFor="timeZone" className="block text-sm font-medium text-gray-700">Time Zone</label>
-                {/* Apply consistent input styling */}
                 <input type="text" id="timeZone" name="timeZone" value={formData.timeZone} onChange={handleChange} required placeholder="e.g., UTC+3" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
             </div>
           </div>
         </fieldset>
 
+        {/* Noon Position & Course Section (Always Visible) */}
+        <fieldset className="border p-4 rounded">
+            <legend className="text-lg font-medium px-2">Noon Position & Course</legend>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"> {/* Date/Time */}
+                <div><label htmlFor="noonDate" className="block text-sm font-medium text-gray-700">Noon Date</label><input type="date" id="noonDate" name="noonDate" value={formData.noonDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                <div><label htmlFor="noonTime" className="block text-sm font-medium text-gray-700">Noon Time</label><input type="time" id="noonTime" name="noonTime" value={formData.noonTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> {/* Lat/Lon/Course */}
+                 <CoordinateInputGroup
+                    label="Noon Latitude"
+                    idPrefix="noonLat"
+                    degreeValue={formData.noonLatDeg ?? ''}
+                    minuteValue={formData.noonLatMin ?? ''}
+                    directionValue={formData.noonLatDir ?? 'N'}
+                    onDegreeChange={(e) => handleCoordinateChange('noonLat', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('noonLat', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('noonLat', 'Dir', e.target.value)}
+                    directionOptions={['N', 'S']}
+                    required={true}
+                 />
+                 <CoordinateInputGroup
+                    label="Noon Longitude"
+                    idPrefix="noonLon"
+                    degreeValue={formData.noonLonDeg ?? ''}
+                    minuteValue={formData.noonLonMin ?? ''}
+                    directionValue={formData.noonLonDir ?? 'E'}
+                    onDegreeChange={(e) => handleCoordinateChange('noonLon', 'Deg', e.target.value)}
+                    onMinuteChange={(e) => handleCoordinateChange('noonLon', 'Min', e.target.value)}
+                    onDirectionChange={(e) => handleCoordinateChange('noonLon', 'Dir', e.target.value)}
+                    directionOptions={['E', 'W']}
+                    required={true}
+                 />
+                <div><label htmlFor="noonCourse" className="block text-sm font-medium text-gray-700">Noon Course (°)</label><input type="number" step="any" id="noonCourse" name="noonCourse" value={formData.noonCourse} onChange={handleChange} required min="0" max="360" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+            </div>
+        </fieldset>
+
         {/* Passage State & Distance Section */}
         <fieldset className="border p-4 rounded">
-          <legend className="text-lg font-medium px-2">Passage State & Distance</legend> {/* Match legend style */}
+          <legend className="text-lg font-medium px-2">Passage State & Distance</legend> 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
              <div>
-                <label htmlFor="passageState" className="block text-sm font-medium text-gray-700">Passage State</label>
-                 {/* Apply consistent select styling */}
-                <select id="passageState" name="passageState" value={formData.passageState} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">
-                    <option value="NOON">NOON</option>
+                <label htmlFor="passageState" className="block text-sm font-medium text-gray-700">Passage State (Optional)</label>
+                <select 
+                    id="passageState" 
+                    name="passageState" 
+                    value={formData.passageState ?? ''} // Use nullish coalescing for value prop
+                    onChange={handleChange} 
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"
+                >
+                    <option value="" disabled={prevNoonState === 'SOSP'}>-- Select SOSP/ROSP (Optional) --</option>
                     <option value="SOSP">SOSP</option>
-                    <option value="ROSP">ROSP</option>
+                    <option value="ROSP" disabled={prevNoonState !== 'SOSP'}>ROSP</option>
                 </select>
+                 {prevNoonState === 'SOSP' && <p className="text-xs text-blue-600 mt-1">SOSP or ROSP required after previous SOSP.</p>}
+                 {prevNoonState !== 'SOSP' && <p className="text-xs text-gray-500 mt-1">ROSP only allowed after SOSP.</p>}
             </div>
              <div>
                 <label htmlFor="distanceSinceLastReport" className="block text-sm font-medium text-gray-700">Distance Since Last (NM)</label>
-                 {/* Apply consistent input styling */}
                 <input type="number" step="0.1" id="distanceSinceLastReport" name="distanceSinceLastReport" value={formData.distanceSinceLastReport} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" />
             </div>
            </div>
-           {/* Conditional Fields */}
-           {formData.passageState === 'NOON' && (
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                   {/* Inputs for noonDate, noonTime, noonLatitude, noonLongitude */}
-                    <p className="col-span-full text-sm text-blue-700">NOON Details Required</p>
-                    {/* Apply consistent input styling */}
-                    <div><label className="block text-sm font-medium text-gray-700">Noon Date</label><input type="date" name="noonDate" value={formData.noonDate} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Noon Time</label><input type="time" name="noonTime" value={formData.noonTime} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Noon Latitude</label><input type="number" step="any" name="noonLatitude" value={formData.noonLatitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Noon Longitude</label><input type="number" step="any" name="noonLongitude" value={formData.noonLongitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-               </div>
-           )}
+           {/* Conditional SOSP/ROSP Fields */}
             {formData.passageState === 'SOSP' && (
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                   {/* Inputs for sospDate, sospTime, sospLatitude, sospLongitude */}
-                    <p className="col-span-full text-sm text-yellow-700">SOSP Details Required</p>
-                    {/* Apply consistent input styling */}
-                    <div><label className="block text-sm font-medium text-gray-700">SOSP Date</label><input type="date" name="sospDate" value={formData.sospDate} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">SOSP Time</label><input type="time" name="sospTime" value={formData.sospTime} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">SOSP Latitude</label><input type="number" step="any" name="sospLatitude" value={formData.sospLatitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">SOSP Longitude</label><input type="number" step="any" name="sospLongitude" value={formData.sospLongitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded space-y-4">
+                    <p className="text-sm text-yellow-700 font-medium">SOSP Details Required</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium text-gray-700">SOSP Date</label><input type="date" name="sospDate" value={formData.sospDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700">SOSP Time</label><input type="time" name="sospTime" value={formData.sospTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <CoordinateInputGroup label="SOSP Latitude" idPrefix="sospLat" degreeValue={formData.sospLatDeg ?? ''} minuteValue={formData.sospLatMin ?? ''} directionValue={formData.sospLatDir ?? 'N'} onDegreeChange={(e) => handleCoordinateChange('sospLat', 'Deg', e.target.value)} onMinuteChange={(e) => handleCoordinateChange('sospLat', 'Min', e.target.value)} onDirectionChange={(e) => handleCoordinateChange('sospLat', 'Dir', e.target.value)} directionOptions={['N', 'S']} required={true} />
+                        <CoordinateInputGroup label="SOSP Longitude" idPrefix="sospLon" degreeValue={formData.sospLonDeg ?? ''} minuteValue={formData.sospLonMin ?? ''} directionValue={formData.sospLonDir ?? 'E'} onDegreeChange={(e) => handleCoordinateChange('sospLon', 'Deg', e.target.value)} onMinuteChange={(e) => handleCoordinateChange('sospLon', 'Min', e.target.value)} onDirectionChange={(e) => handleCoordinateChange('sospLon', 'Dir', e.target.value)} directionOptions={['E', 'W']} required={true} />
+                        <div><label className="block text-sm font-medium text-gray-700">SOSP Course (°)</label><input type="number" step="any" name="sospCourse" value={formData.sospCourse} onChange={handleChange} required min="0" max="360" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                    </div>
                </div>
            )}
             {formData.passageState === 'ROSP' && (
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-3 bg-green-50 border border-green-200 rounded">
-                   {/* Inputs for rospDate, rospTime, rospLatitude, rospLongitude */}
-                    <p className="col-span-full text-sm text-green-700">ROSP Details Required</p>
-                    {/* Apply consistent input styling */}
-                    <div><label className="block text-sm font-medium text-gray-700">ROSP Date</label><input type="date" name="rospDate" value={formData.rospDate} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">ROSP Time</label><input type="time" name="rospTime" value={formData.rospTime} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">ROSP Latitude</label><input type="number" step="any" name="rospLatitude" value={formData.rospLatitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700">ROSP Longitude</label><input type="number" step="any" name="rospLongitude" value={formData.rospLongitude} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+               <div className="p-3 bg-green-50 border border-green-200 rounded space-y-4">
+                    <p className="text-sm text-green-700 font-medium">ROSP Details Required</p>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium text-gray-700">ROSP Date</label><input type="date" name="rospDate" value={formData.rospDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700">ROSP Time</label><input type="time" name="rospTime" value={formData.rospTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <CoordinateInputGroup label="ROSP Latitude" idPrefix="rospLat" degreeValue={formData.rospLatDeg ?? ''} minuteValue={formData.rospLatMin ?? ''} directionValue={formData.rospLatDir ?? 'N'} onDegreeChange={(e) => handleCoordinateChange('rospLat', 'Deg', e.target.value)} onMinuteChange={(e) => handleCoordinateChange('rospLat', 'Min', e.target.value)} onDirectionChange={(e) => handleCoordinateChange('rospLat', 'Dir', e.target.value)} directionOptions={['N', 'S']} required={true} />
+                        <CoordinateInputGroup label="ROSP Longitude" idPrefix="rospLon" degreeValue={formData.rospLonDeg ?? ''} minuteValue={formData.rospLonMin ?? ''} directionValue={formData.rospLonDir ?? 'E'} onDegreeChange={(e) => handleCoordinateChange('rospLon', 'Deg', e.target.value)} onMinuteChange={(e) => handleCoordinateChange('rospLon', 'Min', e.target.value)} onDirectionChange={(e) => handleCoordinateChange('rospLon', 'Dir', e.target.value)} directionOptions={['E', 'W']} required={true} />
+                        <div><label className="block text-sm font-medium text-gray-700">ROSP Course (°)</label><input type="number" step="any" name="rospCourse" value={formData.rospCourse} onChange={handleChange} required min="0" max="360" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm" /></div>
+                    </div>
                </div>
            )}
         </fieldset>
 
         {/* Weather Section */}
         <fieldset className="border p-4 rounded">
-          <legend className="text-lg font-medium px-2">Weather</legend> {/* Match legend style */}
+          <legend className="text-lg font-medium px-2">Weather</legend> 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="windDirection" className="block text-sm font-medium text-gray-700">Wind Direction</label>
-              <select id="windDirection" name="windDirection" value={formData.windDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> {/* Consistent select */}
+              <select id="windDirection" name="windDirection" value={formData.windDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> 
                 {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
               </select>
             </div>
              <div>
               <label htmlFor="windForce" className="block text-sm font-medium text-gray-700">Wind Force (Beaufort)</label>
-              <input type="number" id="windForce" name="windForce" value={formData.windForce} onChange={handleChange} required min="0" max="12" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Consistent input */}
+              <input type="number" id="windForce" name="windForce" value={formData.windForce} onChange={handleChange} required min="0" max="12" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> 
             </div>
              <div>
               <label htmlFor="seaDirection" className="block text-sm font-medium text-gray-700">Sea Direction</label>
-               <select id="seaDirection" name="seaDirection" value={formData.seaDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> {/* Consistent select */}
+               <select id="seaDirection" name="seaDirection" value={formData.seaDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> 
                  {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
                </select>
             </div>
              <div>
               <label htmlFor="seaState" className="block text-sm font-medium text-gray-700">Sea State (Douglas Scale)</label>
-              <input type="number" id="seaState" name="seaState" value={formData.seaState} onChange={handleChange} required min="0" max="9" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Consistent input */}
+              <input type="number" id="seaState" name="seaState" value={formData.seaState} onChange={handleChange} required min="0" max="9" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> 
             </div>
              <div>
               <label htmlFor="swellDirection" className="block text-sm font-medium text-gray-700">Swell Direction</label>
-               <select id="swellDirection" name="swellDirection" value={formData.swellDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> {/* Consistent select */}
+               <select id="swellDirection" name="swellDirection" value={formData.swellDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white"> 
                  {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
                </select>
             </div>
              <div>
               <label htmlFor="swellHeight" className="block text-sm font-medium text-gray-700">Swell Height (m)</label>
-              <input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Consistent input */}
+              <input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> 
             </div>
           </div>
         </fieldset>
@@ -362,7 +515,7 @@ const NoonForm: React.FC = () => {
           <BunkerConsumptionSection
             formData={formData}
             handleChange={handleChange}
-            title="Consumption (24h)"
+            // title prop removed
           />
           <BunkerSupplySection
             formData={formData}
@@ -391,22 +544,21 @@ const NoonForm: React.FC = () => {
         </fieldset>
 
         {/* Submission Area */}
-        <div className="pt-4"> {/* Keep pt-4 */}
-          {error && <p className="text-red-600 mb-4">{error}</p>} {/* Keep error/success messages */}
+        <div className="pt-4"> 
+          {error && <p className="text-red-600 mb-4">{error}</p>} 
           {success && <p className="text-green-600 mb-4">{success}</p>}
-           {/* Match DepartureForm button style exactly */}
           <button
             type="submit"
             disabled={isLoading || !vesselInfo}
             className={`w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out ${
-              (isLoading || !vesselInfo) ? 'opacity-70 cursor-not-allowed' : '' // Keep disabled logic
+              (isLoading || !vesselInfo) ? 'opacity-70 cursor-not-allowed' : '' 
             }`}
           >
-            {isLoading ? 'Submitting...' : 'Submit Noon Report'} {/* Keep button text */}
+            {isLoading ? 'Submitting...' : 'Submit Noon Report'} 
           </button>
         </div>
       </form>
-    </> // Close the fragment opened at the start
+    </> 
   );
 };
 

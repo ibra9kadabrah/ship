@@ -5,7 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CaptainLayout from './layouts/CaptainLayout'; // Import actual layout
-// Import actual Captain Dashboard Page (if needed, or just use layout)
+import CaptainDisplayDashboardPage from './pages/CaptainDisplayDashboardPage'; // Import new dashboard
 // import CaptainDashboardPage from './pages/CaptainDashboardPage'; 
 import DepartureForm from './components/forms/DepartureForm'; // Import actual form
 import NoonForm from './components/forms/NoonForm'; // Import actual form
@@ -37,7 +37,9 @@ function App() {
           {/* Protected Captain Routes */}
           <Route path="/captain" element={<ProtectedRoute roles={['captain']} />}> {/* Specify captain role */}
             <Route element={<CaptainLayout />}> {/* Use actual Layout */}
-              <Route index element={<ReportHistory />} /> {/* Default view shows report history */}
+              <Route index element={<CaptainDisplayDashboardPage />} /> {/* Default to new dashboard */}
+              <Route path="dashboard-display" element={<CaptainDisplayDashboardPage />} /> {/* Explicit dashboard route */}
+              <Route path="history" element={<ReportHistory />} /> {/* Route for report history */}
               <Route path="forms/departure" element={<DepartureForm />} /> {/* Use actual form */}
               <Route path="forms/noon" element={<NoonForm />} /> {/* Add Noon route */}
               <Route path="forms/arrival" element={<ArrivalForm />} /> {/* Add Arrival route */}
@@ -76,7 +78,7 @@ const DefaultRedirect: React.FC = () => {
     if (user?.role === 'admin') {
       return <Navigate to="/admin" replace />;
     } else if (user?.role === 'captain') {
-      return <Navigate to="/captain" replace />;
+      return <Navigate to="/captain/dashboard-display" replace />; // Redirect captain to new dashboard
     } else if (user?.role === 'office') { // Add redirect for office role
       return <Navigate to="/office" replace />;
     }

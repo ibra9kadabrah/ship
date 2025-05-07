@@ -41,8 +41,12 @@ type ReportRecordData = {
     cargoStatus?: CargoStatus | null;
     faspDate?: string | null;
     faspTime?: string | null;
-    faspLatitude?: number | null;
-    faspLongitude?: number | null;
+    faspLatDeg?: number | null;
+    faspLatMin?: number | null;
+    faspLatDir?: 'N' | 'S' | null;
+    faspLonDeg?: number | null;
+    faspLonMin?: number | null;
+    faspLonDir?: 'E' | 'W' | null;
     faspCourse?: number | null;
     harbourDistance?: number | null;
     harbourTime?: string | null;
@@ -90,20 +94,71 @@ type ReportRecordData = {
     meTcExhaustTempOut?: number | null;
     meThrustBearingTemp?: number | null;
     meDailyRunHours?: number | null;
+    mePresentRpm?: number | null; // Added Present RPM
+    meCurrentSpeed?: number | null; // Added Current Speed
+    // Calculated Performance Metrics
+    sailingTimeVoyage?: number | null;
+    avgSpeedVoyage?: number | null;
     // Noon Report Specific Fields (align with schema and BaseReport)
     passageState?: 'NOON' | 'SOSP' | 'ROSP' | null; // Use literal type or import PassageState
     noonDate?: string | null;
     noonTime?: string | null;
-    noonLatitude?: number | null;
-    noonLongitude?: number | null;
+    noonLatDeg?: number | null;
+    noonLatMin?: number | null;
+    noonLatDir?: 'N' | 'S' | null;
+    noonLonDeg?: number | null;
+    noonLonMin?: number | null;
+    noonLonDir?: 'E' | 'W' | null;
+    noonCourse?: number | null; // Added noonCourse
     sospDate?: string | null;
     sospTime?: string | null;
-    sospLatitude?: number | null;
-    sospLongitude?: number | null;
+    sospLatDeg?: number | null;
+    sospLatMin?: number | null;
+    sospLatDir?: 'N' | 'S' | null;
+    sospLonDeg?: number | null;
+    sospLonMin?: number | null;
+    sospLonDir?: 'E' | 'W' | null;
+    sospCourse?: number | null; // Added sospCourse
     rospDate?: string | null;
     rospTime?: string | null;
-    rospLatitude?: number | null;
-    rospLongitude?: number | null;
+    rospLatDeg?: number | null;
+    rospLatMin?: number | null;
+    rospLatDir?: 'N' | 'S' | null;
+    rospLonDeg?: number | null;
+    rospLonMin?: number | null;
+    rospLonDir?: 'E' | 'W' | null;
+    rospCourse?: number | null; // Added rospCourse
+    // Arrival Report Specific Fields
+    eospDate?: string | null;
+    eospTime?: string | null;
+    eospLatDeg?: number | null;
+    eospLatMin?: number | null;
+    eospLatDir?: 'N' | 'S' | null;
+    eospLonDeg?: number | null;
+    eospLonMin?: number | null;
+    eospLonDir?: 'E' | 'W' | null;
+    eospCourse?: number | null;
+    estimatedBerthingDate?: string | null;
+    estimatedBerthingTime?: string | null;
+    // Berth Report Specific Fields
+    berthDate?: string | null;
+    berthTime?: string | null;
+    berthLatDeg?: number | null;
+    berthLatMin?: number | null;
+    berthLatDir?: 'N' | 'S' | null;
+    berthLonDeg?: number | null;
+    berthLonMin?: number | null;
+    berthLonDir?: 'E' | 'W' | null;
+    cargoLoaded?: number | null;
+    cargoUnloaded?: number | null;
+    cargoOpsStartDate?: string | null;
+    cargoOpsStartTime?: string | null;
+    cargoOpsEndDate?: string | null;
+    cargoOpsEndTime?: string | null;
+    berthNumber?: string | null; // Added Berth Number
+    // Timestamps (already handled by _createReportRecord)
+    // createdAt: string;
+    // updatedAt: string;
 };
 
 
@@ -271,6 +326,18 @@ export const ReportModel = {
     return report || null;
   },
 
+  // Get latest *approved* report for a voyage
+  getLatestApprovedReportForVoyage(voyageId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE voyageId = ? AND status = 'approved'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+      LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Partial<Report> | undefined;
+    return report || null;
+  },
+
   // Get the first report for a voyage (typically the departure report)
   getFirstReportForVoyage(voyageId: string): Partial<Report> | null {
     const stmt = db.prepare(`
@@ -299,6 +366,18 @@ export const ReportModel = {
     const filteredReports = reports.filter(report => report.reportType === reportType);
     // The sorting is already newest first from _getAllReportsForVoyage
     return filteredReports[0] || null; 
+  },
+
+  // Get the latest Noon report for a voyage (needed for SOSP/ROSP logic)
+  getLatestNoonReportForVoyage(voyageId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT * FROM reports
+      WHERE voyageId = ? AND reportType = 'noon'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+      LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Partial<Report> | undefined;
+    return report || null;
   },
 
   // Check if a captain has pending reports for a specific voyage
@@ -333,7 +412,7 @@ export const ReportModel = {
   findByCaptainId(captainId: string): Partial<Report>[] {
     const stmt = db.prepare(`
       SELECT * FROM reports 
-      WHERE captainId = ? 
+      WHERE captainId = ? AND status != 'rejected'
       ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
     `);
     return stmt.all(captainId) as Partial<Report>[];
@@ -350,6 +429,7 @@ export const ReportModel = {
       FROM reports r
       LEFT JOIN vessels v ON r.vesselId = v.id
       LEFT JOIN users u ON r.captainId = u.id
+      WHERE r.status != 'rejected'
       ORDER BY r.reportDate DESC, r.reportTime DESC, r.createdAt DESC
     `;
     const stmt = db.prepare(sql);

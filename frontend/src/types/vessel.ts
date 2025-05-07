@@ -14,6 +14,8 @@ export interface VesselInfo {
   initialRobAeOil?: number | null;
   // Add field to carry over destination from previous voyage
   lastDestinationPort?: string | null; 
+  // Add field for previous noon state logic
+  previousNoonPassageState?: 'SOSP' | 'ROSP' | null; 
   // Add other fields if needed for display
 }
 

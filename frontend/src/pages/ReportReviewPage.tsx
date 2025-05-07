@@ -111,20 +111,59 @@ const ReportReviewPage: React.FC = () => {
         {/* --- Position & Distance --- */}
          <section>
             <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Position & Distance</h3>
-             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-                {/* Display relevant position based on report type */}
-                {reportDetails.reportType === 'departure' && reportDetails.faspLatitude !== null && <div><strong>FASP:</strong> {reportDetails.faspLatitude?.toFixed(5)}, {reportDetails.faspLongitude?.toFixed(5)} @ {reportDetails.faspCourse}° ({reportDetails.faspDate} {reportDetails.faspTime})</div>}
-                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'NOON' && reportDetails.noonLatitude !== null && <div><strong>Noon Pos:</strong> {reportDetails.noonLatitude?.toFixed(5)}, {reportDetails.noonLongitude?.toFixed(5)} ({reportDetails.noonDate} {reportDetails.noonTime})</div>}
-                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'SOSP' && reportDetails.sospLatitude !== null && <div><strong>SOSP:</strong> {reportDetails.sospLatitude?.toFixed(5)}, {reportDetails.sospLongitude?.toFixed(5)} ({reportDetails.sospDate} {reportDetails.sospTime})</div>}
-                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'ROSP' && reportDetails.rospLatitude !== null && <div><strong>ROSP:</strong> {reportDetails.rospLatitude?.toFixed(5)}, {reportDetails.rospLongitude?.toFixed(5)} ({reportDetails.rospDate} {reportDetails.rospTime})</div>}
-                {reportDetails.reportType === 'arrival' && reportDetails.eospLatitude !== null && <div><strong>EOSP:</strong> {reportDetails.eospLatitude?.toFixed(5)}, {reportDetails.eospLongitude?.toFixed(5)} @ {reportDetails.eospCourse}° ({reportDetails.eospDate} {reportDetails.eospTime})</div>}
-                {reportDetails.reportType === 'berth' && reportDetails.berthLatitude !== null && <div><strong>Berth Pos:</strong> {reportDetails.berthLatitude?.toFixed(5)}, {reportDetails.berthLongitude?.toFixed(5)} ({reportDetails.berthDate} {reportDetails.berthTime})</div>}
-                
-                {/* Distances */}
-                {reportDetails.harbourDistance !== null && <div><strong>Harbour Dist:</strong> {reportDetails.harbourDistance} NM ({reportDetails.harbourTime} hrs)</div>}
-                {reportDetails.distanceSinceLastReport !== null && <div><strong>Dist Since Last:</strong> {reportDetails.distanceSinceLastReport} NM</div>}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm"> {/* Adjusted grid for better coordinate display */}
+                {/* Display relevant position based on report type using Deg/Min/Dir */}
+                {reportDetails.reportType === 'departure' && reportDetails.faspLatDeg !== null && (
+                  <div><strong>FASP:</strong> {reportDetails.faspLatDeg}° {reportDetails.faspLatMin?.toFixed(3)}' {reportDetails.faspLatDir} / {reportDetails.faspLonDeg}° {reportDetails.faspLonMin?.toFixed(3)}' {reportDetails.faspLonDir} @ {reportDetails.faspCourse}° ({reportDetails.faspDate} {reportDetails.faspTime})</div>
+                )}
+                {reportDetails.reportType === 'noon' && reportDetails.noonLatDeg !== null && (
+                  <div className="col-span-full"> {/* Span full width for better layout */}
+                    <strong>Noon Pos:</strong> {reportDetails.noonLatDeg}° {reportDetails.noonLatMin?.toFixed(3)}' {reportDetails.noonLatDir} / {reportDetails.noonLonDeg}° {reportDetails.noonLonMin?.toFixed(3)}' {reportDetails.noonLonDir} @ {reportDetails.noonCourse ?? 'N/A'}° ({reportDetails.noonDate} {reportDetails.noonTime})
+                    {/* Add Passage State with conditional styling */}
+                    {reportDetails.passageState && (
+                      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
+                        reportDetails.passageState === 'SOSP' ? 'bg-yellow-100 text-yellow-800' :
+                        reportDetails.passageState === 'ROSP' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800' // Default for NOON or others
+                      }`}>
+                        {reportDetails.passageState}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'SOSP' && reportDetails.sospLatDeg !== null && (
+                  <div className="col-span-full text-yellow-700"><strong>SOSP:</strong> {reportDetails.sospLatDeg}° {reportDetails.sospLatMin?.toFixed(3)}' {reportDetails.sospLatDir} / {reportDetails.sospLonDeg}° {reportDetails.sospLonMin?.toFixed(3)}' {reportDetails.sospLonDir} @ {reportDetails.sospCourse ?? 'N/A'}° ({reportDetails.sospDate} {reportDetails.sospTime})</div>
+                )}
+                {reportDetails.reportType === 'noon' && reportDetails.passageState === 'ROSP' && reportDetails.rospLatDeg !== null && (
+                  <div className="col-span-full text-green-700"><strong>ROSP:</strong> {reportDetails.rospLatDeg}° {reportDetails.rospLatMin?.toFixed(3)}' {reportDetails.rospLatDir} / {reportDetails.rospLonDeg}° {reportDetails.rospLonMin?.toFixed(3)}' {reportDetails.rospLonDir} @ {reportDetails.rospCourse ?? 'N/A'}° ({reportDetails.rospDate} {reportDetails.rospTime})</div>
+                )}
+                {reportDetails.reportType === 'arrival' && reportDetails.eospLatDeg !== null && (
+                  <div className="col-span-full"><strong>EOSP:</strong> {reportDetails.eospLatDeg}° {reportDetails.eospLatMin?.toFixed(3)}' {reportDetails.eospLatDir} / {reportDetails.eospLonDeg}° {reportDetails.eospLonMin?.toFixed(3)}' {reportDetails.eospLonDir} @ {reportDetails.eospCourse}° ({reportDetails.eospDate} {reportDetails.eospTime})</div>
+                )}
+                {reportDetails.reportType === 'berth' && reportDetails.berthLatDeg !== null && (
+                  <> {/* Use fragment to group position and number */}
+                    <div><strong>Berth Pos:</strong> {reportDetails.berthLatDeg}° {reportDetails.berthLatMin?.toFixed(3)}' {reportDetails.berthLatDir} / {reportDetails.berthLonDeg}° {reportDetails.berthLonMin?.toFixed(3)}' {reportDetails.berthLonDir} ({reportDetails.berthDate} {reportDetails.berthTime})</div>
+                    {reportDetails.berthNumber && <div><strong>Berth Number:</strong> {reportDetails.berthNumber}</div>}
+                  </>
+                )}
+
+                {/* Distances & Performance - Now conditional */}
+                {(reportDetails.reportType === 'departure' || reportDetails.reportType === 'arrival') && reportDetails.harbourDistance !== null && (
+                  <div><strong>Harbour Dist:</strong> {reportDetails.harbourDistance} NM ({reportDetails.harbourTime} hrs)</div>
+                )}
+                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival') && reportDetails.distanceSinceLastReport !== null && (
+                  <div><strong>Dist Since Last:</strong> {reportDetails.distanceSinceLastReport} NM</div>
+                )}
                 {reportDetails.totalDistanceTravelled !== null && <div><strong>Total Dist Travelled:</strong> {reportDetails.totalDistanceTravelled?.toFixed(1)} NM</div>}
                 {reportDetails.distanceToGo !== null && <div><strong>Dist To Go:</strong> {reportDetails.distanceToGo?.toFixed(1)} NM</div>}
+                {/* Performance Metrics */}
+                {reportDetails.meDailyRunHours !== null && <div><strong>Sailing Time (24h):</strong> {reportDetails.meDailyRunHours?.toFixed(1)} hrs</div>}
+                {/* Calculate Avg Speed (24h) */}
+                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival') && reportDetails.distanceSinceLastReport !== null && reportDetails.meDailyRunHours !== null && reportDetails.meDailyRunHours > 0 && (
+                  <div><strong>Avg Speed (24h):</strong> {(reportDetails.distanceSinceLastReport / reportDetails.meDailyRunHours).toFixed(1)} knots</div>
+                )}
+                {reportDetails.sailingTimeVoyage !== null && <div><strong>Total Sailing Time (Voyage):</strong> {reportDetails.sailingTimeVoyage?.toFixed(1)} hrs</div>}
+                {reportDetails.avgSpeedVoyage !== null && <div><strong>Avg Speed (Voyage):</strong> {reportDetails.avgSpeedVoyage?.toFixed(1)} knots</div>}
              </div>
          </section>
 
@@ -152,28 +191,43 @@ const ReportReviewPage: React.FC = () => {
 
         {/* --- Bunkers Consumption & Supply --- */}
         <section>
-          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Consumption (24h) & Supply</h3>
-           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-             {/* Consumption */}
-             {reportDetails.totalConsumptionLsifo !== null && <div><strong>Total LSIFO Cons:</strong> {reportDetails.totalConsumptionLsifo?.toFixed(2)} MT</div>}
-             {reportDetails.totalConsumptionLsmgo !== null && <div><strong>Total LSMGO Cons:</strong> {reportDetails.totalConsumptionLsmgo?.toFixed(2)} MT</div>}
-             {reportDetails.totalConsumptionCylOil !== null && <div><strong>Total Cyl Oil Cons:</strong> {reportDetails.totalConsumptionCylOil?.toFixed(1)} L</div>}
-             {reportDetails.totalConsumptionMeOil !== null && <div><strong>Total ME Oil Cons:</strong> {reportDetails.totalConsumptionMeOil?.toFixed(1)} L</div>}
-             {reportDetails.totalConsumptionAeOil !== null && <div><strong>Total AE Oil Cons:</strong> {reportDetails.totalConsumptionAeOil?.toFixed(1)} L</div>}
-             {/* Supply */}
-             {reportDetails.supplyLsifo !== null && reportDetails.supplyLsifo > 0 && <div className="text-blue-600"><strong>LSIFO Supply:</strong> {reportDetails.supplyLsifo?.toFixed(2)} MT</div>}
-             {reportDetails.supplyLsmgo !== null && reportDetails.supplyLsmgo > 0 && <div className="text-blue-600"><strong>LSMGO Supply:</strong> {reportDetails.supplyLsmgo?.toFixed(2)} MT</div>}
-             {reportDetails.supplyCylOil !== null && reportDetails.supplyCylOil > 0 && <div className="text-blue-600"><strong>Cyl Oil Supply:</strong> {reportDetails.supplyCylOil?.toFixed(1)} L</div>}
-             {reportDetails.supplyMeOil !== null && reportDetails.supplyMeOil > 0 && <div className="text-blue-600"><strong>ME Oil Supply:</strong> {reportDetails.supplyMeOil?.toFixed(1)} L</div>}
-             {reportDetails.supplyAeOil !== null && reportDetails.supplyAeOil > 0 && <div className="text-blue-600"><strong>AE Oil Supply:</strong> {reportDetails.supplyAeOil?.toFixed(1)} L</div>}
+          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Bunker Consumption (24h)</h3>
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+             {/* Individual Consumption - Conditionally show ME/AE */}
+             {reportDetails.reportType !== 'berth' && reportDetails.meConsumptionLsifo !== null && <div><strong>ME LSIFO:</strong> {reportDetails.meConsumptionLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.reportType !== 'berth' && reportDetails.meConsumptionLsmgo !== null && <div><strong>ME LSMGO:</strong> {reportDetails.meConsumptionLsmgo?.toFixed(2)} MT</div>}
+             {reportDetails.reportType !== 'berth' && reportDetails.meConsumptionCylOil !== null && <div><strong>ME Cyl Oil:</strong> {reportDetails.meConsumptionCylOil?.toFixed(1)} L</div>}
+             {reportDetails.reportType !== 'berth' && reportDetails.meConsumptionMeOil !== null && <div><strong>ME Lube Oil:</strong> {reportDetails.meConsumptionMeOil?.toFixed(1)} L</div>}
+             {reportDetails.reportType !== 'berth' && reportDetails.meConsumptionAeOil !== null && <div><strong>ME AE Oil:</strong> {reportDetails.meConsumptionAeOil?.toFixed(1)} L</div>}
+             {/* Always show Boiler/Aux */}
+             {reportDetails.boilerConsumptionLsifo !== null && <div><strong>Boiler LSIFO:</strong> {reportDetails.boilerConsumptionLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.boilerConsumptionLsmgo !== null && <div><strong>Boiler LSMGO:</strong> {reportDetails.boilerConsumptionLsmgo?.toFixed(2)} MT</div>}
+             {reportDetails.auxConsumptionLsifo !== null && <div><strong>Aux LSIFO:</strong> {reportDetails.auxConsumptionLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.auxConsumptionLsmgo !== null && <div><strong>Aux LSMGO:</strong> {reportDetails.auxConsumptionLsmgo?.toFixed(2)} MT</div>}
+             {/* Keep Totals? Maybe remove to avoid redundancy */}
+             {/* {reportDetails.totalConsumptionLsifo !== null && <div><strong>Total LSIFO Cons:</strong> {reportDetails.totalConsumptionLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.totalConsumptionLsmgo !== null && <div><strong>Total LSMGO Cons:</strong> {reportDetails.totalConsumptionLsmgo?.toFixed(2)} MT</div>} */}
+             {/* ... keep other totals if desired ... */}
+           </div>
+        </section>
+        <section>
+           <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Bunker Supply (Since Last)</h3>
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-2 text-sm">
+             {/* Individual Supply */}
+             {reportDetails.supplyLsifo !== null && <div><strong>LSIFO:</strong> {reportDetails.supplyLsifo > 0 ? <span className="text-blue-600">{reportDetails.supplyLsifo?.toFixed(2)} MT</span> : '0.00 MT'}</div>}
+             {reportDetails.supplyLsmgo !== null && <div><strong>LSMGO:</strong> {reportDetails.supplyLsmgo > 0 ? <span className="text-blue-600">{reportDetails.supplyLsmgo?.toFixed(2)} MT</span> : '0.00 MT'}</div>}
+             {reportDetails.supplyCylOil !== null && <div><strong>Cyl Oil:</strong> {reportDetails.supplyCylOil > 0 ? <span className="text-blue-600">{reportDetails.supplyCylOil?.toFixed(1)} L</span> : '0.0 L'}</div>}
+             {reportDetails.supplyMeOil !== null && <div><strong>ME Oil:</strong> {reportDetails.supplyMeOil > 0 ? <span className="text-blue-600">{reportDetails.supplyMeOil?.toFixed(1)} L</span> : '0.0 L'}</div>}
+             {reportDetails.supplyAeOil !== null && <div><strong>AE Oil:</strong> {reportDetails.supplyAeOil > 0 ? <span className="text-blue-600">{reportDetails.supplyAeOil?.toFixed(1)} L</span> : '0.0 L'}</div>}
            </div>
         </section>
 
-        {/* --- Machinery ME --- */}
-        <section>
-          <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Main Engine Parameters</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 text-sm">
-            {reportDetails.meFoPressure !== null && <div><strong>FO Press:</strong> {reportDetails.meFoPressure?.toFixed(1)} bar</div>}
+        {/* --- Machinery ME --- Conditionally render this whole section */}
+        {reportDetails.reportType !== 'berth' && (
+          <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Main Engine Parameters</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+              {reportDetails.meFoPressure !== null && <div><strong>FO Press:</strong> {reportDetails.meFoPressure?.toFixed(1)} bar</div>}
             {reportDetails.meLubOilPressure !== null && <div><strong>LO Press:</strong> {reportDetails.meLubOilPressure?.toFixed(1)} bar</div>}
             {reportDetails.meFwInletTemp !== null && <div><strong>FW Inlet:</strong> {reportDetails.meFwInletTemp?.toFixed(1)} °C</div>}
             {reportDetails.meLoInletTemp !== null && <div><strong>LO Inlet:</strong> {reportDetails.meLoInletTemp?.toFixed(1)} °C</div>}
@@ -183,12 +237,17 @@ const ReportReviewPage: React.FC = () => {
             {reportDetails.meTcExhaustTempIn !== null && <div><strong>TC Exh In:</strong> {reportDetails.meTcExhaustTempIn} °C</div>}
             {reportDetails.meTcExhaustTempOut !== null && <div><strong>TC Exh Out:</strong> {reportDetails.meTcExhaustTempOut} °C</div>}
             {reportDetails.meThrustBearingTemp !== null && <div><strong>Thrust Brg:</strong> {reportDetails.meThrustBearingTemp?.toFixed(1)} °C</div>}
-            {reportDetails.meDailyRunHours !== null && <div><strong>ME Daily Run:</strong> {reportDetails.meDailyRunHours?.toFixed(1)} hrs</div>}
-          </div>
-        </section>
+            {/* ME Daily Run Hours moved to Performance section */}
+            {/* {reportDetails.meDailyRunHours !== null && <div><strong>ME Daily Run:</strong> {reportDetails.meDailyRunHours?.toFixed(1)} hrs</div>} */}
+            {/* Added RPM and Speed */}
+            {reportDetails.mePresentRpm !== null && <div><strong>Present RPM:</strong> {reportDetails.mePresentRpm?.toFixed(1)}</div>}
+              {reportDetails.meCurrentSpeed !== null && <div><strong>Current Speed:</strong> {reportDetails.meCurrentSpeed?.toFixed(1)} knots</div>}
+            </div>
+          </section>
+        )}
 
-        {/* --- Machinery Engine Units --- */}
-        {reportDetails.engineUnits && reportDetails.engineUnits.length > 0 && (
+        {/* --- Machinery Engine Units --- Conditionally render this whole section */}
+        {reportDetails.reportType !== 'berth' && reportDetails.engineUnits && reportDetails.engineUnits.length > 0 && (
           <section>
             <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Engine Units</h3>
             <div className="overflow-x-auto">

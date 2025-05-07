@@ -78,7 +78,13 @@ const ReportHistory: React.FC = () => {
                 <tr key={report.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.reportDate}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.reportTime}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{report.reportType}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                    {report.reportType}
+                    {/* Conditionally display berth number */}
+                    {report.reportType === 'berth' && report.berthNumber && (
+                      <span className="ml-2 text-xs text-gray-400">(Berth: {report.berthNumber})</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(report.status)}`}>
                       {report.status}

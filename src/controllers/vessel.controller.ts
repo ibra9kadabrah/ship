@@ -147,10 +147,22 @@ export const VesselController = {
                                     ? latestApprovedDeparture.destinationPort 
                                     : null;
 
-      // Construct the response object including the last destination port
+      // --- Fetch previous Noon state for the active voyage ---
+      let previousNoonPassageState = null;
+      const activeVoyage = VoyageModel.findActiveByVesselId(vessel.id);
+      if (activeVoyage) {
+        const latestNoonReport = ReportModel.getLatestNoonReportForVoyage(activeVoyage.id);
+        if (latestNoonReport) {
+          previousNoonPassageState = latestNoonReport.passageState ?? null;
+        }
+      }
+      // --- End Fetch previous Noon state ---
+
+      // Construct the response object including the last destination port and previous noon state
       const vesselInfoResponse = {
         ...vessel, // Include all original vessel fields
-        lastDestinationPort: lastDestinationPort 
+        lastDestinationPort: lastDestinationPort,
+        previousNoonPassageState: previousNoonPassageState // Add the fetched state
       };
 
       res.status(200).json(vesselInfoResponse);

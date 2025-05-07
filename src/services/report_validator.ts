@@ -23,12 +23,15 @@ import { Vessel } from '../types/vessel'; // Import Vessel type
 export function validateReportInput(
     reportInput: CreateReportDTO, 
     vessel: Vessel, // Add vessel parameter
-    previousReport?: Partial<Report> | null, 
-    initialCargoStatus: CargoStatus | null = null // Add default null
+    previousReport: Partial<Report> | null, // Keep previousReport optional for first departure
+    initialCargoStatus: CargoStatus | null = null, // Add default null
+    previousNoonPassageState?: PassageState | null // Add previous noon state
 ): void {
 
     // --- Report Sequence Validation ---
-    if (previousReport) { // Only check sequence if there's a previous report in the voyage
+    // Skip sequence check if the current report is 'departure'.
+    // The service layer handles the logic for allowing a new departure based on previous voyage state.
+    if (previousReport && reportInput.reportType !== 'departure') { 
         const previousType = previousReport.reportType;
         const currentType = reportInput.reportType;
 
@@ -44,26 +47,21 @@ export function validateReportInput(
                 }
                 break;
             case 'arrival':
-                // After arrival, only Berth or a *new* Departure is allowed.
-                // The service layer handles the new voyage logic for departure.
-                if (currentType !== 'berth' && currentType !== 'departure') { 
-                    throw new Error(`Invalid report sequence: After 'arrival', only 'berth' or 'departure' is allowed, not '${currentType}'.`);
+                 // After arrival, only Berth is allowed *within the same voyage*. Departure is handled by the service layer.
+                if (currentType !== 'berth') { 
+                    throw new Error(`Invalid report sequence: After 'arrival', only 'berth' is allowed within the same voyage, not '${currentType}'.`);
                 }
                 break;
             case 'berth':
-                 // After berth, only another Berth or a *new* Departure is allowed.
-                if (currentType !== 'berth' && currentType !== 'departure') {
-                    throw new Error(`Invalid report sequence: After 'berth', only 'berth' or 'departure' is allowed, not '${currentType}'.`);
+                 // After berth, only another Berth is allowed *within the same voyage*. Departure is handled by the service layer.
+                if (currentType !== 'berth') {
+                    throw new Error(`Invalid report sequence: After 'berth', only 'berth' is allowed within the same voyage, not '${currentType}'.`);
                 }
                 break;
         }
-    } else { 
-        // No previous report for this voyage exists.
-        // The only valid report type here is 'departure'.
-        // Note: The service layer separately handles the "first report ever for vessel must be departure" rule.
-        if (reportInput.reportType !== 'departure') {
-             throw new Error(`Invalid report: Cannot submit '${reportInput.reportType}' as the first report of a voyage. Must be 'departure'.`);
-        }
+    } else if (!previousReport && reportInput.reportType !== 'departure') {
+        // No previous report exists, and the current report is NOT departure. This is invalid.
+        throw new Error(`Invalid report: Cannot submit '${reportInput.reportType}' as the first report of a voyage. Must be 'departure'.`);
     }
     // --- End Report Sequence Validation ---
 
@@ -75,13 +73,14 @@ export function validateReportInput(
             validateDepartureReport(reportInput, vessel); 
             break;
         case 'noon':
-            validateNoonReport(reportInput, previousReport?.passageState as PassageState | null); // Cast to PassageState
+            // Pass the specific previous noon state to the noon validator
+            validateNoonReport(reportInput, previousNoonPassageState); 
             break;
         case 'arrival':
             validateArrivalReport(reportInput);
             break;
         case 'berth':
-            validateBerthReport(reportInput, initialCargoStatus); // Pass initial cargo status
+            validateBerthReport(reportInput); // Removed initialCargoStatus argument
             break;
         default:
             // This should ideally be caught by the type system, but good practice
@@ -119,17 +118,20 @@ function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Ves
         // BaseReportData fields (already mandatory in type)
         'vesselId', 'reportDate', 'reportTime', 'timeZone', 'windDirection', 'seaDirection', 
         'swellDirection', 'windForce', 'seaState', 'swellHeight', 'meConsumptionLsifo', 
-        'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil', 
-        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 
-        'auxConsumptionLsmgo', 'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 
-        'supplyAeOil', 'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 
-        'meScavengeAirTemp', 'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 
-        'meThrustBearingTemp', 'meDailyRunHours',
+        'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo',
+        'auxConsumptionLsmgo', 'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil',
+        'supplyAeOil', 'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp',
+        'meScavengeAirTemp', 'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut',
+        'meThrustBearingTemp', 'meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed', // Added mePresentRpm, meCurrentSpeed
         // DepartureSpecificData fields
         'departurePort', 'destinationPort', 'voyageDistance', 'etaDate', 'etaTime',
         'fwdDraft', 'aftDraft', 'cargoQuantity', 'cargoType', 'cargoStatus',
-        'faspDate', 'faspTime', 'faspLatitude', 'faspLongitude', 'faspCourse',
-        'harbourDistance', 'harbourTime', 'distanceSinceLastReport',
+        'faspDate', 'faspTime', 
+        'faspLatDeg', 'faspLatMin', 'faspLatDir', // Replaced faspLatitude
+        'faspLonDeg', 'faspLonMin', 'faspLonDir', // Replaced faspLongitude
+        'faspCourse',
+        'harbourDistance', 'harbourTime', // Removed distanceSinceLastReport
     ];
 
     for (const field of requiredFields) {
@@ -152,6 +154,13 @@ function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Ves
      if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { // Assuming 0-9 meter range
          throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
     }
+    // Check for presence before range validation, as they are optional in BaseReportData but required here
+    if (reportInput.mePresentRpm === undefined || reportInput.mePresentRpm === null || reportInput.mePresentRpm < 0) {
+        throw new Error(`Invalid or missing mePresentRpm value: ${reportInput.mePresentRpm}. Must be provided and non-negative for Departure.`);
+    }
+    if (reportInput.meCurrentSpeed === undefined || reportInput.meCurrentSpeed === null || reportInput.meCurrentSpeed < 0) {
+        throw new Error(`Invalid or missing meCurrentSpeed value: ${reportInput.meCurrentSpeed}. Must be provided and non-negative for Departure.`);
+    }
     // Validate Machinery for Departure
     validateMachineryInput(reportInput);
 }
@@ -159,43 +168,56 @@ function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Ves
 // --- Specific Report Validators ---
 
 function validateNoonReport(reportInput: NoonSpecificData, previousPassageState?: PassageState | null): void {
-    // 1. Validate mandatory Noon-specific fields
+    // 1. Validate mandatory Noon-specific fields (Distance is always required)
     if (reportInput.distanceSinceLastReport === undefined || reportInput.distanceSinceLastReport === null || reportInput.distanceSinceLastReport < 0) {
         throw new Error(`Missing or invalid mandatory field for noon report: distanceSinceLastReport (must be >= 0).`);
     }
-    if (!reportInput.passageState || !['NOON', 'SOSP', 'ROSP'].includes(reportInput.passageState)) {
-        throw new Error(`Missing or invalid mandatory field for noon report: passageState.`);
-    }
+    // Removed the mandatory check for passageState itself. It can be null now.
+    // if (!reportInput.passageState || !['NOON', 'SOSP', 'ROSP'].includes(reportInput.passageState)) {
+    //     throw new Error(`Missing or invalid mandatory field for noon report: passageState.`);
+    // }
 
-    // 2. Validate State Transition Logic
+    // 2. Validate State Transition Logic (Handles null passageState)
     if (previousPassageState === 'SOSP') {
+        // If previous was SOSP, current MUST be SOSP or ROSP (cannot be null/empty)
         if (reportInput.passageState !== 'SOSP' && reportInput.passageState !== 'ROSP') {
-            throw new Error(`Invalid passageState transition: Previous state was SOSP, current state must be SOSP or ROSP, but got ${reportInput.passageState}.`);
+            throw new Error(`Invalid passageState transition: Previous state was SOSP, current state must be SOSP or ROSP, but got '${reportInput.passageState ?? 'None'}'.`);
         }
-    } else { // Previous state was NOON, ROSP, or this is the first noon report (previousPassageState is null/undefined)
-        if (reportInput.passageState !== 'NOON' && reportInput.passageState !== 'SOSP') {
-            throw new Error(`Invalid passageState transition: Previous state was ${previousPassageState || 'None/Departure'}, current state must be NOON or SOSP, but got ${reportInput.passageState}.`);
+    } else { // Previous state was null, NOON, or ROSP
+        // If previous was not SOSP, current cannot be ROSP
+        if (reportInput.passageState === 'ROSP') {
+            throw new Error(`Invalid passageState transition: Previous state was ${previousPassageState || 'None/Departure'}, current state cannot be ROSP.`);
         }
+        // Allow null or SOSP if previous was not SOSP
     }
 
     // 3. Validate Conditional Fields based on current passageState
-    switch (reportInput.passageState) {
-        case 'NOON':
-            if (!reportInput.noonDate || !reportInput.noonTime || reportInput.noonLatitude === undefined || reportInput.noonLongitude === undefined) {
-                throw new Error(`Missing mandatory fields for NOON passage state: noonDate, noonTime, noonLatitude, noonLongitude.`);
-            }
-            // Add specific format/range checks if needed (e.g., latitude -90 to 90)
-            break;
-        case 'SOSP':
-            if (!reportInput.sospDate || !reportInput.sospTime || reportInput.sospLatitude === undefined || reportInput.sospLongitude === undefined) {
-                throw new Error(`Missing mandatory fields for SOSP passage state: sospDate, sospTime, sospLatitude, sospLongitude.`);
-            }
-            break;
-        case 'ROSP':
-            if (!reportInput.rospDate || !reportInput.rospTime || reportInput.rospLatitude === undefined || reportInput.rospLongitude === undefined) {
-                throw new Error(`Missing mandatory fields for ROSP passage state: rospDate, rospTime, rospLatitude, rospLongitude.`);
-            }
-            break;
+    // Always validate Noon Date/Time/Lat/Lon/Course as they are now mandatory base fields for Noon report
+    if (!reportInput.noonDate || !reportInput.noonTime ||
+        reportInput.noonLatDeg === undefined || reportInput.noonLatMin === undefined || !reportInput.noonLatDir ||
+        reportInput.noonLonDeg === undefined || reportInput.noonLonMin === undefined || !reportInput.noonLonDir ||
+        reportInput.noonCourse === undefined || reportInput.mePresentRpm === undefined || reportInput.meCurrentSpeed === undefined) { // Added mePresentRpm, meCurrentSpeed check
+        throw new Error(`Missing mandatory fields for Noon report: noonDate, noonTime, noonLatitude (Deg/Min/Dir), noonLongitude (Deg/Min/Dir), noonCourse, mePresentRpm, meCurrentSpeed.`);
+    }
+    // Add range checks for noon lat/lon/course if needed
+
+    // Validate SOSP/ROSP fields only if the state is selected
+    if (reportInput.passageState === 'SOSP') {
+        if (!reportInput.sospDate || !reportInput.sospTime || 
+            reportInput.sospLatDeg === undefined || reportInput.sospLatMin === undefined || !reportInput.sospLatDir ||
+            reportInput.sospLonDeg === undefined || reportInput.sospLonMin === undefined || !reportInput.sospLonDir ||
+            reportInput.sospCourse === undefined) {
+            throw new Error(`Missing mandatory fields for SOSP passage state: sospDate, sospTime, sospLatitude (Deg/Min/Dir), sospLongitude (Deg/Min/Dir), sospCourse.`);
+        }
+        // Add specific format/range checks if needed
+    } else if (reportInput.passageState === 'ROSP') {
+         if (!reportInput.rospDate || !reportInput.rospTime || 
+             reportInput.rospLatDeg === undefined || reportInput.rospLatMin === undefined || !reportInput.rospLatDir ||
+             reportInput.rospLonDeg === undefined || reportInput.rospLonMin === undefined || !reportInput.rospLonDir ||
+             reportInput.rospCourse === undefined) {
+            throw new Error(`Missing mandatory fields for ROSP passage state: rospDate, rospTime, rospLatitude (Deg/Min/Dir), rospLongitude (Deg/Min/Dir), rospCourse.`);
+        }
+        // Add specific format/range checks if needed
     }
 
     // 4. Validate common BaseReportData fields (ranges, etc.) - Reuse checks from departure if applicable
@@ -208,6 +230,12 @@ function validateNoonReport(reportInput: NoonSpecificData, previousPassageState?
      if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { // Assuming 0-9 meter range
          throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
     }
+    if (reportInput.mePresentRpm < 0) {
+        throw new Error(`Invalid mePresentRpm value: ${reportInput.mePresentRpm}. Must be non-negative.`);
+    }
+    if (reportInput.meCurrentSpeed < 0) {
+        throw new Error(`Invalid meCurrentSpeed value: ${reportInput.meCurrentSpeed}. Must be non-negative.`);
+    }
     // Add more checks for other BaseReportData fields if necessary
 
     // 5. Validate Machinery for Noon
@@ -218,8 +246,15 @@ function validateArrivalReport(reportInput: ArrivalSpecificData): void {
     // 1. Validate mandatory Arrival-specific fields
     const requiredFields: Array<keyof ArrivalSpecificData> = [
         // Base fields are already checked by TS/BaseReportData type
+        // Add base machinery fields that are required input
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp',
+        'meScavengeAirTemp', 'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut',
+        'meThrustBearingTemp', 'meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed', // Added mePresentRpm, meCurrentSpeed
         // Arrival Specific fields:
-        'eospDate', 'eospTime', 'eospLatitude', 'eospLongitude', 'eospCourse',
+        'eospDate', 'eospTime',
+        'eospLatDeg', 'eospLatMin', 'eospLatDir', // Replaced eospLatitude
+        'eospLonDeg', 'eospLonMin', 'eospLonDir', // Replaced eospLongitude
+        'eospCourse',
         'distanceSinceLastReport', 'harbourDistance', 'harbourTime',
         'estimatedBerthingDate', 'estimatedBerthingTime'
     ];
@@ -255,8 +290,15 @@ function validateArrivalReport(reportInput: ArrivalSpecificData): void {
      if (reportInput.seaState < 0 || reportInput.seaState > 9) {
          throw new Error(`Invalid seaState value: ${reportInput.seaState}. Must be between 0 and 9.`);
     }
-     if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { 
+     if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) {
          throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
+    }
+    // Check for presence before range validation, as they are optional in BaseReportData but required here
+    if (reportInput.mePresentRpm === undefined || reportInput.mePresentRpm === null || reportInput.mePresentRpm < 0) {
+        throw new Error(`Invalid or missing mePresentRpm value: ${reportInput.mePresentRpm}. Must be provided and non-negative for Arrival.`);
+    }
+    if (reportInput.meCurrentSpeed === undefined || reportInput.meCurrentSpeed === null || reportInput.meCurrentSpeed < 0) {
+        throw new Error(`Invalid or missing meCurrentSpeed value: ${reportInput.meCurrentSpeed}. Must be provided and non-negative for Arrival.`);
     }
     // Add more checks for other BaseReportData fields if necessary
 
@@ -268,9 +310,14 @@ function validateArrivalReport(reportInput: ArrivalSpecificData): void {
     validateMachineryInput(reportInput);
 }
 
-function validateBerthReport(reportInput: BerthSpecificData, initialCargoStatus: CargoStatus | null): void {
-    // 1. Validate mandatory Berth Navigation fields
-    const navFields: Array<keyof BerthSpecificData> = ['berthDate', 'berthTime', 'berthLatitude', 'berthLongitude'];
+// Removed initialCargoStatus parameter
+function validateBerthReport(reportInput: BerthSpecificData): void {
+    // 1. Validate mandatory Berth Navigation fields (including Berth Number)
+    const navFields: Array<keyof BerthSpecificData> = [
+        'berthDate', 'berthTime', 'berthNumber', // Added berthNumber
+        'berthLatDeg', 'berthLatMin', 'berthLatDir', // Replaced berthLatitude
+        'berthLonDeg', 'berthLonMin', 'berthLonDir'  // Replaced berthLongitude
+    ];
     for (const field of navFields) {
         if (reportInput[field] === undefined || reportInput[field] === null || reportInput[field] === '') {
             throw new Error(`Missing mandatory field for berth report: ${field}`);
@@ -286,25 +333,15 @@ function validateBerthReport(reportInput: BerthSpecificData, initialCargoStatus:
         }
     }
 
-    // 3. Validate Conditional Cargo Amount Input
-    if (!initialCargoStatus) {
-         throw new Error("Cannot validate berth report without knowing the initial cargo status from departure.");
+    // 3. Validate Cargo Amount Input (Non-negative check)
+    // Both fields are optional now, but if provided, must be non-negative.
+    if (reportInput.cargoLoaded !== undefined && reportInput.cargoLoaded !== null && reportInput.cargoLoaded < 0) {
+        throw new Error(`Invalid 'cargoLoaded' field for berth report. Must be >= 0 if provided.`);
     }
-    if (initialCargoStatus === 'Loaded') {
-        if (reportInput.cargoUnloaded === undefined || reportInput.cargoUnloaded === null || reportInput.cargoUnloaded < 0) {
-             throw new Error(`Missing or invalid 'cargoUnloaded' field for berth report (required when initial status was 'Loaded'). Must be >= 0.`);
-        }
-        if (reportInput.cargoLoaded !== undefined && reportInput.cargoLoaded !== null && reportInput.cargoLoaded !== 0) {
-             throw new Error(`Invalid 'cargoLoaded' field for berth report. Should not be provided or must be 0 when initial status was 'Loaded'.`);
-        }
-    } else if (initialCargoStatus === 'Empty') {
-         if (reportInput.cargoLoaded === undefined || reportInput.cargoLoaded === null || reportInput.cargoLoaded < 0) {
-             throw new Error(`Missing or invalid 'cargoLoaded' field for berth report (required when initial status was 'Empty'). Must be >= 0.`);
-        }
-         if (reportInput.cargoUnloaded !== undefined && reportInput.cargoUnloaded !== null && reportInput.cargoUnloaded !== 0) {
-             throw new Error(`Invalid 'cargoUnloaded' field for berth report. Should not be provided or must be 0 when initial status was 'Empty'.`);
-        }
+    if (reportInput.cargoUnloaded !== undefined && reportInput.cargoUnloaded !== null && reportInput.cargoUnloaded < 0) {
+        throw new Error(`Invalid 'cargoUnloaded' field for berth report. Must be >= 0 if provided.`);
     }
+
 
      // 4. Validate common BaseReportData fields (weather might be optional/irrelevant at berth?)
      // Re-evaluate which base fields are truly mandatory for a Berth report.
@@ -318,9 +355,9 @@ function validateBerthReport(reportInput: BerthSpecificData, initialCargoStatus:
       if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) { 
           throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
      }
-     // Consumption/Supply/Machinery might also be optional or have different rules at berth.
-     // Assuming machinery is NOT required for Berth for now.
-     // validateMachineryInput(reportInput); 
+     // Consumption/Supply fields are still required by BaseReportData type, rely on TS for presence check.
+     // ME Params and Engine Units are optional in BaseReportData now and not applicable to Berth.
+     // Removed call to validateMachineryInput for Berth reports.
 }
 
 

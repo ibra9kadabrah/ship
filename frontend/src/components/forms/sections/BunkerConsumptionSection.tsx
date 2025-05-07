@@ -17,17 +17,17 @@ interface BunkerConsumptionData {
 interface BunkerConsumptionSectionProps {
   formData: BunkerConsumptionData;
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
-  title: string; // e.g., "Consumption (24h)" or "Consumption Since Last Report"
+  // title prop removed
 }
 
 const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
   formData,
   handleChange,
-  title,
+  // title parameter removed
 }) => {
   return (
     <>
-      <h4 className="font-medium mb-2 text-gray-800">{title}</h4>
+      <h4 className="font-medium mb-2 text-gray-800">Consumption</h4> {/* Static title */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label htmlFor="meConsumptionLsifo" className="block text-sm font-medium text-gray-700">ME LSIFO (MT)</label>
