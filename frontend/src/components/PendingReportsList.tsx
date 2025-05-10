@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPendingReports, getAllVessels } from '../services/api'; // Added getAllVessels
-import { ReportHistoryItem } from '../types/report'; 
+import { ReportHistoryItem, ReportType } from '../types/report'; // Ensure ReportType is imported
 import { VesselInfo as Vessel } from '../types/vessel'; // Added Vessel type import
+
+// Helper function to get display name for report types
+const getReportTypeDisplayName = (type: ReportType): string => {
+  switch (type) {
+    case 'departure': return 'Departure';
+    case 'noon': return 'Noon';
+    case 'arrival': return 'Arrival';
+    case 'berth': return 'Berth';
+    case 'arrival_anchor_noon': return 'Arr. Anchor Noon';
+    default: return type; // Fallback to the raw type
+  }
+};
 
 // Define a more specific type for pending reports if needed, 
 // otherwise ReportHistoryItem might suffice if it includes necessary fields.
@@ -107,10 +119,10 @@ const PendingReportsList: React.FC = () => {
               {pendingReports.map((report) => (
                 <tr key={report.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{report.id.substring(0, 8)}...</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                    {report.reportType}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {getReportTypeDisplayName(report.reportType)}
                     {/* Conditionally display course for Noon reports */}
-                    {report.reportType === 'noon' && (
+                    {(report.reportType === 'noon' || report.reportType === 'arrival_anchor_noon') && (
                       <span className="ml-2 text-xs text-gray-400">
                         (Course: {report.noonCourse ?? report.sospCourse ?? report.rospCourse ?? 'N/A'}°)
                       </span>

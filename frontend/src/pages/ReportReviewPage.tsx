@@ -131,6 +131,12 @@ const ReportReviewPage: React.FC = () => {
                     )}
                   </div>
                 )}
+                {/* Display for Arrival Anchor Noon Report */}
+                {(reportDetails.reportType === 'arrival_anchor_noon') && reportDetails.noonLatDeg !== null && (
+                  <div className="col-span-full">
+                    <strong>Anchor Noon Pos:</strong> {reportDetails.noonLatDeg}° {reportDetails.noonLatMin?.toFixed(3)}' {reportDetails.noonLatDir} / {reportDetails.noonLonDeg}° {reportDetails.noonLonMin?.toFixed(3)}' {reportDetails.noonLonDir} @ {reportDetails.noonCourse ?? 'N/A'}° ({reportDetails.noonDate} {reportDetails.noonTime})
+                  </div>
+                )}
                 {reportDetails.reportType === 'noon' && reportDetails.passageState === 'SOSP' && reportDetails.sospLatDeg !== null && (
                   <div className="col-span-full text-yellow-700"><strong>SOSP:</strong> {reportDetails.sospLatDeg}° {reportDetails.sospLatMin?.toFixed(3)}' {reportDetails.sospLatDir} / {reportDetails.sospLonDeg}° {reportDetails.sospLonMin?.toFixed(3)}' {reportDetails.sospLonDir} @ {reportDetails.sospCourse ?? 'N/A'}° ({reportDetails.sospDate} {reportDetails.sospTime})</div>
                 )}
@@ -151,7 +157,7 @@ const ReportReviewPage: React.FC = () => {
                 {(reportDetails.reportType === 'departure' || reportDetails.reportType === 'arrival') && reportDetails.harbourDistance !== null && (
                   <div><strong>Harbour Dist:</strong> {reportDetails.harbourDistance} NM ({reportDetails.harbourTime} hrs)</div>
                 )}
-                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival') && reportDetails.distanceSinceLastReport !== null && (
+                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival' || reportDetails.reportType === 'arrival_anchor_noon') && reportDetails.distanceSinceLastReport !== null && (
                   <div><strong>Dist Since Last:</strong> {reportDetails.distanceSinceLastReport} NM</div>
                 )}
                 {reportDetails.totalDistanceTravelled !== null && <div><strong>Total Dist Travelled:</strong> {reportDetails.totalDistanceTravelled?.toFixed(1)} NM</div>}
@@ -159,7 +165,7 @@ const ReportReviewPage: React.FC = () => {
                 {/* Performance Metrics */}
                 {reportDetails.meDailyRunHours !== null && <div><strong>Sailing Time (24h):</strong> {reportDetails.meDailyRunHours?.toFixed(1)} hrs</div>}
                 {/* Calculate Avg Speed (24h) */}
-                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival') && reportDetails.distanceSinceLastReport !== null && reportDetails.meDailyRunHours !== null && reportDetails.meDailyRunHours > 0 && (
+                {(reportDetails.reportType === 'noon' || reportDetails.reportType === 'arrival' || reportDetails.reportType === 'arrival_anchor_noon') && reportDetails.distanceSinceLastReport !== null && reportDetails.meDailyRunHours !== null && reportDetails.meDailyRunHours > 0 && (
                   <div><strong>Avg Speed (24h):</strong> {(reportDetails.distanceSinceLastReport / reportDetails.meDailyRunHours).toFixed(1)} knots</div>
                 )}
                 {reportDetails.sailingTimeVoyage !== null && <div><strong>Total Sailing Time (Voyage):</strong> {reportDetails.sailingTimeVoyage?.toFixed(1)} hrs</div>}
