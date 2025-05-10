@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getPendingReports } from '../services/api'; 
+import { getPendingReports, getAllVessels } from '../services/api'; // Added getAllVessels
 import { ReportHistoryItem } from '../types/report'; 
+import { VesselInfo as Vessel } from '../types/vessel'; // Added Vessel type import
 
 // Define a more specific type for pending reports if needed, 
 // otherwise ReportHistoryItem might suffice if it includes necessary fields.
@@ -12,40 +13,85 @@ type PendingReport = ReportHistoryItem & {
 
 const PendingReportsList: React.FC = () => {
   const [pendingReports, setPendingReports] = useState<PendingReport[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [selectedVesselId, setSelectedVesselId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingVessels, setIsLoadingVessels] = useState(true);
+  const [errorVessels, setErrorVessels] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setIsLoadingVessels(true);
+      setErrorVessels(null);
+      try {
+        const vesselsData = await getAllVessels();
+        setVessels(vesselsData);
+      } catch (err: any) {
+        console.error("Error fetching vessels:", err);
+        setErrorVessels(err.response?.data?.message || "Failed to load vessels.");
+      } finally {
+        setIsLoadingVessels(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
     const fetchPendingReports = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const responseData = await getPendingReports(); 
-        // TODO: Ensure the backend actually returns vesselName and captainName
+        const responseData = await getPendingReports(selectedVesselId || undefined); 
         setPendingReports(responseData); 
       } catch (err: any) {
         console.error("Error fetching pending reports:", err);
         setError(err.response?.data?.message || "Failed to load pending reports.");
-        setPendingReports([]); // Clear data on error
+        setPendingReports([]); 
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchPendingReports();
-  }, []);
+    // Only fetch reports if vessels have loaded (or failed to load)
+    if (!isLoadingVessels) {
+        fetchPendingReports();
+    }
+  }, [selectedVesselId, isLoadingVessels]);
 
   return (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
-       <h2 className="text-xl font-semibold text-gray-800 p-6 border-b">Pending Reports for Review</h2>
-      {isLoading && <p className="text-center text-gray-600 p-4">Loading pending reports...</p>}
-      {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded m-4">Error: {error}</p>}
+      <div className="flex justify-between items-center p-6 border-b">
+        <h2 className="text-xl font-semibold text-gray-800">Pending Reports for Review</h2>
+        <div>
+          <label htmlFor="vesselFilterPending" className="mr-2 text-sm font-medium text-gray-700">Filter by Vessel:</label>
+          <select
+            id="vesselFilterPending"
+            name="vesselFilterPending"
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+            value={selectedVesselId}
+            onChange={(e) => setSelectedVesselId(e.target.value)}
+            disabled={isLoadingVessels || !!errorVessels}
+          >
+            <option value="">All Ships</option>
+            {vessels.map((vessel) => (
+              <option key={vessel.id} value={vessel.id}>
+                {vessel.name}
+              </option>
+            ))}
+          </select>
+          {isLoadingVessels && <p className="text-xs text-gray-500 mt-1">Loading vessels...</p>}
+          {errorVessels && <p className="text-xs text-red-500 mt-1">Error loading vessels.</p>}
+        </div>
+      </div>
+
+      {(isLoading || isLoadingVessels) && <p className="text-center text-gray-600 p-4">Loading data...</p>}
+      {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded m-4">Error loading reports: {error}</p>}
       
-      {!isLoading && !error && pendingReports.length === 0 && (
-        <p className="text-center text-gray-500 p-4">No reports are currently pending review.</p>
+      {!isLoading && !error && pendingReports.length === 0 && !isLoadingVessels && (
+        <p className="text-center text-gray-500 p-4">No reports are currently pending review for the selected filter.</p>
       )}
 
-      {!isLoading && !error && pendingReports.length > 0 && (
+      {!isLoading && !error && pendingReports.length > 0 && !isLoadingVessels && (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>

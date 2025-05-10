@@ -748,8 +748,8 @@ export const ReportService = {
     },
 
     // Updated return type to reflect joined names from the model
-    async getPendingReports(): Promise<(Partial<Report> & { vesselName?: string; captainName?: string })[]> {
-        const reportsWithNames = ReportModel.getPendingReports();
+    async getPendingReports(vesselId?: string): Promise<(Partial<Report> & { vesselName?: string; captainName?: string })[]> {
+        const reportsWithNames = ReportModel.getPendingReports(vesselId);
         // The model now returns the names, so just return the result.
         // No need for the console warning anymore regarding base data only for this specific function.
         return reportsWithNames; 
@@ -772,9 +772,9 @@ export const ReportService = {
 
     // Get all reports (for admin/office history view)
     // Updated return type to reflect joined names from the model
-    async getAllReports(): Promise<(Partial<Report> & { vesselName?: string; captainName?: string })[]> {
+    async getAllReports(vesselId?: string): Promise<(Partial<Report> & { vesselName?: string; captainName?: string })[]> {
         // TODO: Add pagination/filtering parameters later
-        const reportsWithNames = ReportModel.findAll(); 
+        const reportsWithNames = ReportModel.findAll(vesselId); 
         // No longer need the warning as the model now fetches names
         return reportsWithNames;
     },

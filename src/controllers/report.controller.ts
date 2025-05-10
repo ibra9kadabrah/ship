@@ -59,7 +59,8 @@ export const ReportController = {
          res.status(403).json({ error: 'Admin or office access required' });
          return;
       }
-      const reports = await ReportService.getPendingReports();
+      const vesselId = req.query.vesselId as string | undefined;
+      const reports = await ReportService.getPendingReports(vesselId);
       res.status(200).json(reports);
     } catch (error: any) {
       console.error('Error fetching pending reports:', error);
@@ -146,7 +147,8 @@ export const ReportController = {
      try {
        // Middleware already ensures admin role
        // TODO: Add pagination/filtering query parameters (e.g., req.query.page, req.query.limit)
-       const reports = await ReportService.getAllReports(); // Call service method (to be created)
+       const vesselId = req.query.vesselId as string | undefined;
+       const reports = await ReportService.getAllReports(vesselId); // Call service method (to be created)
        res.status(200).json(reports);
      } catch (error: any) {
        console.error('Error fetching all reports:', error);

@@ -33,16 +33,22 @@ apiClient.interceptors.request.use(
 // Define types needed for API functions (can be moved to a types file)
 // Assuming PendingReport and FullReportViewDTO will be defined in types/report.ts
 import { ReportHistoryItem, FullReportViewDTO } from '../types/report'; // Import FullReportViewDTO
+import { VesselInfo as Vessel } from '../types/vessel'; // Import VesselInfo and alias as Vessel
 type PendingReport = ReportHistoryItem; // ReportHistoryItem now includes optional names
 // type FullReportViewPlaceholder = any; // Placeholder removed
 type ReviewPayload = { status: 'approved' | 'rejected'; reviewComments?: string };
 
 /**
  * Fetches the list of pending reports for review.
+ * @param vesselId - Optional ID of the vessel to filter reports by.
  */
-export const getPendingReports = async (): Promise<PendingReport[]> => {
+export const getPendingReports = async (vesselId?: string): Promise<PendingReport[]> => {
+  let url = '/reports/pending';
+  if (vesselId) {
+    url += `?vesselId=${vesselId}`;
+  }
   // Use the correct endpoint based on report.routes.ts
-  const response = await apiClient.get<PendingReport[]>('/reports/pending'); 
+  const response = await apiClient.get<PendingReport[]>(url); 
   return response.data;
 };
 
@@ -67,11 +73,23 @@ export const reviewReport = async (reportId: string, reviewData: ReviewPayload):
 
 /**
  * Fetches all reports (for admin view).
- * TODO: Add params for pagination/filtering later.
+ * @param vesselId - Optional ID of the vessel to filter reports by.
  */
-export const getAllReports = async (): Promise<PendingReport[]> => { // Using PendingReport type for now
+export const getAllReports = async (vesselId?: string): Promise<PendingReport[]> => { // Using PendingReport type for now
+  let url = '/reports';
+  if (vesselId) {
+    url += `?vesselId=${vesselId}`;
+  }
   // Use the correct endpoint based on report.routes.ts
-  const response = await apiClient.get<PendingReport[]>('/reports'); // GET /api/reports
+  const response = await apiClient.get<PendingReport[]>(url); // GET /api/reports
+  return response.data;
+};
+
+/**
+ * Fetches all vessels.
+ */
+export const getAllVessels = async (): Promise<Vessel[]> => {
+  const response = await apiClient.get<Vessel[]>('/vessels');
   return response.data;
 };
 

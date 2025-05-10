@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { Link } from 'react-router-dom';
-import { getAllReports } from '../services/api';
+import { getAllReports, getAllVessels } from '../services/api'; // Added getAllVessels
 import { ReportHistoryItem } from '../types/report';
+import { VesselInfo as Vessel } from '../types/vessel'; // Added Vessel type import
 
 // Define a more specific type if backend provides more data (like names)
 type AdminReportHistoryItem = ReportHistoryItem & {
@@ -32,29 +33,52 @@ const groupReportsByVoyage = (reports: AdminReportHistoryItem[]): Record<string,
 
 const AdminReportHistory: React.FC = () => {
   const [allReports, setAllReports] = useState<AdminReportHistoryItem[]>([]); // Store flat list
+  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [selectedVesselId, setSelectedVesselId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingVessels, setIsLoadingVessels] = useState(true);
+  const [errorVessels, setErrorVessels] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setIsLoadingVessels(true);
+      setErrorVessels(null);
+      try {
+        const vesselsData = await getAllVessels();
+        setVessels(vesselsData);
+      } catch (err: any) {
+        console.error("Error fetching vessels:", err);
+        setErrorVessels(err.response?.data?.message || "Failed to load vessels.");
+      } finally {
+        setIsLoadingVessels(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
     const fetchReports = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await getAllReports();
-        // Store the flat list fetched from the API
+        // Pass selectedVesselId to getAllReports. If it's an empty string, API handles it as "all".
+        const data = await getAllReports(selectedVesselId || undefined); 
         setAllReports(data as AdminReportHistoryItem[]);
       } catch (err: any) {
         console.error("Error fetching all reports:", err);
         setError(err.response?.data?.message || "Failed to load report history.");
-        setAllReports([]); // Clear reports on error
-        // Removed incorrect setReports([]) call
+        setAllReports([]); 
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchReports();
-  }, []);
+    // Only fetch reports if vessels have loaded (or failed to load, to avoid multiple loading states)
+    if (!isLoadingVessels) {
+        fetchReports();
+    }
+  }, [selectedVesselId, isLoadingVessels]); // Re-fetch reports when selectedVesselId or isLoadingVessels changes
 
   // Group reports using useMemo to avoid re-computation on every render
   const groupedReports = useMemo(() => groupReportsByVoyage(allReports), [allReports]);
@@ -75,15 +99,38 @@ const AdminReportHistory: React.FC = () => {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow">
-       <h2 className="text-xl font-semibold mb-4 text-gray-700">Complete Report History (Grouped by Voyage)</h2>
-      {isLoading && <p className="text-center text-gray-600">Loading report history...</p>}
-      {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded">Error: {error}</p>}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-gray-700">Complete Report History (Grouped by Voyage)</h2>
+        <div>
+          <label htmlFor="vesselFilter" className="mr-2 text-sm font-medium text-gray-700">Filter by Vessel:</label>
+          <select
+            id="vesselFilter"
+            name="vesselFilter"
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+            value={selectedVesselId}
+            onChange={(e) => setSelectedVesselId(e.target.value)}
+            disabled={isLoadingVessels || !!errorVessels}
+          >
+            <option value="">All Ships</option>
+            {vessels.map((vessel) => (
+              <option key={vessel.id} value={vessel.id}>
+                {vessel.name}
+              </option>
+            ))}
+          </select>
+          {isLoadingVessels && <p className="text-xs text-gray-500 mt-1">Loading vessels...</p>}
+          {errorVessels && <p className="text-xs text-red-500 mt-1">Error loading vessels.</p>}
+        </div>
+      </div>
 
-      {!isLoading && !error && allReports.length === 0 && (
-        <p className="text-center text-gray-500">No reports found in the system.</p>
+      {(isLoading || isLoadingVessels) && <p className="text-center text-gray-600">Loading data...</p>}
+      {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded">Error loading reports: {error}</p>}
+      
+      {!isLoading && !error && allReports.length === 0 && !isLoadingVessels && (
+        <p className="text-center text-gray-500">No reports found for the selected filter.</p>
       )}
 
-      {!isLoading && !error && allReports.length > 0 && (
+      {!isLoading && !error && allReports.length > 0 && !isLoadingVessels && (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
             <thead className="bg-gray-50">

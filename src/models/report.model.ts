@@ -215,8 +215,8 @@ export const ReportModel = {
 
   // Get pending reports - Joins with vessels and users to get names
   // Returns array of Partial<Report> enhanced with vesselName and captainName
-  getPendingReports(): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
-    const sql = `
+  getPendingReports(vesselId?: string): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
+    let sql = `
       SELECT 
         r.*, 
         v.name AS vesselName, 
@@ -225,11 +225,19 @@ export const ReportModel = {
       LEFT JOIN vessels v ON r.vesselId = v.id
       LEFT JOIN users u ON r.captainId = u.id
       WHERE r.status = ? 
-      ORDER BY r.createdAt DESC
     `;
+    const params: any[] = ['pending'];
+
+    if (vesselId) {
+      sql += ` AND r.vesselId = ?`;
+      params.push(vesselId);
+    }
+
+    sql += ` ORDER BY r.createdAt DESC`;
+    
     const stmt = db.prepare(sql);
     // Cast the result to include the joined names
-    return stmt.all('pending') as (Partial<Report> & { vesselName?: string; captainName?: string })[];
+    return stmt.all(...params) as (Partial<Report> & { vesselName?: string; captainName?: string })[];
   },
 
   // Review a report (approve or reject) - Updates the 'reports' table
@@ -419,9 +427,9 @@ export const ReportModel = {
   },
 
   // Find all reports (for admin/office history) - Joins with vessels and users
-  findAll(): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
+  findAll(vesselId?: string): (Partial<Report> & { vesselName?: string; captainName?: string })[] {
     // TODO: Add pagination (LIMIT/OFFSET) and filtering later
-    const sql = `
+    let sql = `
       SELECT 
         r.*, 
         v.name AS vesselName, 
@@ -430,11 +438,19 @@ export const ReportModel = {
       LEFT JOIN vessels v ON r.vesselId = v.id
       LEFT JOIN users u ON r.captainId = u.id
       WHERE r.status != 'rejected'
-      ORDER BY r.reportDate DESC, r.reportTime DESC, r.createdAt DESC
     `;
+    const params: any[] = [];
+
+    if (vesselId) {
+      sql += ` AND r.vesselId = ?`;
+      params.push(vesselId);
+    }
+
+    sql += ` ORDER BY r.reportDate DESC, r.reportTime DESC, r.createdAt DESC`;
+
     const stmt = db.prepare(sql);
     // Cast the result to include the joined names
-    return stmt.all() as (Partial<Report> & { vesselName?: string; captainName?: string })[];
+    return stmt.all(...params) as (Partial<Report> & { vesselName?: string; captainName?: string })[];
   },
 
   // Find the latest approved departure report for a specific vessel
