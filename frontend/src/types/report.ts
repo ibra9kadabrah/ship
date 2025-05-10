@@ -1,6 +1,6 @@
 // Frontend-specific report types
 
-export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth';
+export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth' | 'arrival_anchor_noon';
 export type ReportStatus = 'pending' | 'approved' | 'rejected';
 
 // Define the structure for report history items fetched from the backend
@@ -236,12 +236,33 @@ export interface BerthFormData extends BaseReportFormData {
   auxEngines?: AuxEngineData[]; 
 }
 
+// Arrival Anchor Noon specific fields for the form payload
+export interface ArrivalAnchorNoonFormData extends BaseReportFormData {
+  reportType: 'arrival_anchor_noon';
+  vesselId: string;
+  distanceSinceLastReport: number | string;
+  // Noon fields (Required for this report type)
+  noonDate: string;
+  noonTime: string;
+  noonLatDeg: number | string;
+  noonLatMin: number | string;
+  noonLatDir: 'N' | 'S';
+  noonLonDeg: number | string;
+  noonLonMin: number | string;
+  noonLonDir: 'E' | 'W';
+  noonCourse: number | string; 
+  // Machinery
+  engineUnits?: EngineUnitData[]; 
+  auxEngines?: AuxEngineData[]; 
+}
+
 // Union type for all form data payloads
 export type ReportFormData = 
   | DepartureSpecificData 
   | NoonFormData 
   | ArrivalFormData 
-  | BerthFormData;
+  | BerthFormData
+  | ArrivalAnchorNoonFormData;
 
 // Type for the response from GET /api/voyages/current/details
 export interface CurrentVoyageDetails {

@@ -420,16 +420,19 @@ export const ReportService = {
             currentRobAeOil: currentRobs.currentRobAeOil,
             totalDistanceTravelled: calculatedTotalDistance,
             distanceToGo: calculatedDistanceToGo,
-            passageState: reportInput.reportType === 'noon' ? (reportInput.passageState || null) : null, // Store null if empty string
-            noonDate: reportInput.reportType === 'noon' ? reportInput.noonDate : null, // Always store noon details now
-            noonTime: reportInput.reportType === 'noon' ? reportInput.noonTime : null,
-            noonLatDeg: reportInput.reportType === 'noon' ? reportInput.noonLatDeg : null,
-            noonLatMin: reportInput.reportType === 'noon' ? reportInput.noonLatMin : null,
-            noonLatDir: reportInput.reportType === 'noon' ? reportInput.noonLatDir : null,
-            noonLonDeg: reportInput.reportType === 'noon' ? reportInput.noonLonDeg : null,
-            noonLonMin: reportInput.reportType === 'noon' ? reportInput.noonLonMin : null,
-            noonLonDir: reportInput.reportType === 'noon' ? reportInput.noonLonDir : null,
-            noonCourse: reportInput.reportType === 'noon' ? reportInput.noonCourse : null, // Added noonCourse
+            // PassageState is only for 'noon' reports
+            passageState: reportInput.reportType === 'noon' ? (reportInput.passageState || null) : null,
+            // Noon fields for 'noon' and 'arrival_anchor_noon'
+            noonDate: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonDate : null,
+            noonTime: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonTime : null,
+            noonLatDeg: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLatDeg : null,
+            noonLatMin: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLatMin : null,
+            noonLatDir: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLatDir : null,
+            noonLonDeg: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLonDeg : null,
+            noonLonMin: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLonMin : null,
+            noonLonDir: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonLonDir : null,
+            noonCourse: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival_anchor_noon') ? reportInput.noonCourse : null,
+            // SOSP/ROSP fields are only for 'noon' reports with specific passageState
             sospDate: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospDate : null,
             sospTime: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospTime : null,
             sospLatDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLatDeg : null,
@@ -438,7 +441,7 @@ export const ReportService = {
             sospLonDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonDeg : null,
             sospLonMin: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonMin : null,
             sospLonDir: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospLonDir : null,
-            sospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospCourse : null, // Added sospCourse
+            sospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'SOSP' ? reportInput.sospCourse : null,
             rospDate: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospDate : null,
             rospTime: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospTime : null,
             rospLatDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLatDeg : null,
@@ -447,7 +450,8 @@ export const ReportService = {
             rospLonDeg: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonDeg : null,
             rospLonMin: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonMin : null,
             rospLonDir: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospLonDir : null,
-            rospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospCourse : null, // Added rospCourse
+            rospCourse: reportInput.reportType === 'noon' && reportInput.passageState === 'ROSP' ? reportInput.rospCourse : null,
+            // EOSP fields are only for 'arrival' reports
             eospDate: reportInput.reportType === 'arrival' ? reportInput.eospDate : null,
             eospTime: reportInput.reportType === 'arrival' ? reportInput.eospTime : null,
             eospLatDeg: reportInput.reportType === 'arrival' ? reportInput.eospLatDeg : null,
@@ -459,6 +463,7 @@ export const ReportService = {
             eospCourse: reportInput.reportType === 'arrival' ? reportInput.eospCourse : null,
             estimatedBerthingDate: reportInput.reportType === 'arrival' ? reportInput.estimatedBerthingDate : null,
             estimatedBerthingTime: reportInput.reportType === 'arrival' ? reportInput.estimatedBerthingTime : null,
+            // Berth fields are only for 'berth' reports
              berthDate: reportInput.reportType === 'berth' ? reportInput.berthDate : null,
              berthTime: reportInput.reportType === 'berth' ? reportInput.berthTime : null,
              berthLatDeg: reportInput.reportType === 'berth' ? reportInput.berthLatDeg : null,
@@ -473,7 +478,7 @@ export const ReportService = {
              cargoOpsStartTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsStartTime : null,
              cargoOpsEndDate: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndDate : null,
              cargoOpsEndTime: reportInput.reportType === 'berth' ? reportInput.cargoOpsEndTime : null,
-             berthNumber: reportInput.reportType === 'berth' ? reportInput.berthNumber : null, // Added berthNumber mapping
+             berthNumber: reportInput.reportType === 'berth' ? reportInput.berthNumber : null,
              // Add calculated performance metrics
              sailingTimeVoyage: calculatedSailingTimeVoyage,
              avgSpeedVoyage: calculatedAvgSpeedVoyage,

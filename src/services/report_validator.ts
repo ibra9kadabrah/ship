@@ -6,6 +6,7 @@ import {
     NoonSpecificData,
     ArrivalSpecificData,
     BerthSpecificData,
+    ArrivalAnchorNoonSpecificData, // Import new type
     PassageState, // Import PassageState
     CargoStatus, // Import CargoStatus
     Report // Import Report type
@@ -47,9 +48,13 @@ export function validateReportInput(
                 }
                 break;
             case 'arrival':
-                 // After arrival, only Berth is allowed *within the same voyage*. Departure is handled by the service layer.
-                if (currentType !== 'berth') { 
-                    throw new Error(`Invalid report sequence: After 'arrival', only 'berth' is allowed within the same voyage, not '${currentType}'.`);
+                if (currentType !== 'berth' && currentType !== 'arrival_anchor_noon') { 
+                    throw new Error(`Invalid report sequence: After 'arrival', only 'berth' or 'arrival_anchor_noon' is allowed within the same voyage, not '${currentType}'.`);
+                }
+                break;
+            case 'arrival_anchor_noon':
+                if (currentType !== 'arrival_anchor_noon' && currentType !== 'berth') {
+                    throw new Error(`Invalid report sequence: After 'arrival_anchor_noon', only another 'arrival_anchor_noon' or 'berth' is allowed, not '${currentType}'.`);
                 }
                 break;
             case 'berth':
@@ -81,6 +86,9 @@ export function validateReportInput(
             break;
         case 'berth':
             validateBerthReport(reportInput); // Removed initialCargoStatus argument
+            break;
+        case 'arrival_anchor_noon':
+            validateArrivalAnchorNoonReport(reportInput);
             break;
         default:
             // This should ideally be caught by the type system, but good practice
@@ -373,4 +381,68 @@ function validateMachineryInput(reportInput: CreateReportDTO): void {
      if (!requiredAux.every(name => providedAuxNames.includes(name))) {
          throw new Error("Auxiliary engine data for DG1 is required.");
      }
+}
+
+function validateArrivalAnchorNoonReport(reportInput: ArrivalAnchorNoonSpecificData): void {
+    // 1. Validate mandatory fields for Arrival Anchor Noon report
+    const requiredFields: Array<keyof ArrivalAnchorNoonSpecificData> = [
+        'reportDate', 'reportTime', 'timeZone', 'distanceSinceLastReport',
+        'noonDate', 'noonTime', 
+        'noonLatDeg', 'noonLatMin', 'noonLatDir',
+        'noonLonDeg', 'noonLonMin', 'noonLonDir',
+        'noonCourse', 'mePresentRpm', 'meCurrentSpeed',
+        // BaseReportData fields that are mandatory
+        'windDirection', 'seaDirection', 'swellDirection', 'windForce', 'seaState', 'swellHeight',
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
+        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
+        // Optional ME fields from BaseReportData, but usually expected for a "Noon" type report
+        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp',
+        'meScavengeAirTemp', 'meTcRpm1', /* meTcRpm2 is optional */ 'meTcExhaustTempIn', 'meTcExhaustTempOut',
+        'meThrustBearingTemp', 'meDailyRunHours',
+    ];
+
+    for (const field of requiredFields) {
+        const value = reportInput[field as keyof ArrivalAnchorNoonSpecificData]; // Use type assertion
+        if (value === undefined || value === null || (typeof value === 'string' && value === '')) {
+            // Allow 0 for numeric fields
+            if (typeof value === 'number' && value === 0) {
+                continue; 
+            }
+            // Allow ME consumption fields to be 0 or null/undefined if vessel is stopped (handled by optionality in type)
+            // This check might be redundant if the field is truly optional in the type and not in requiredFields
+            // However, if it's in requiredFields but can be 0/null, this logic is fine.
+            if (field.startsWith('meConsumption') && (value === null || value === undefined || Number(value) === 0)) {
+                continue;
+            }
+            throw new Error(`Missing mandatory field for Arrival Anchor Noon report: ${field}`);
+        }
+    }
+
+    // 2. Specific range checks (reuse from other validators if applicable)
+    if (reportInput.windForce < 0 || reportInput.windForce > 12) {
+         throw new Error(`Invalid windForce value: ${reportInput.windForce}. Must be between 0 and 12.`);
+    }
+    if (reportInput.seaState < 0 || reportInput.seaState > 9) {
+         throw new Error(`Invalid seaState value: ${reportInput.seaState}. Must be between 0 and 9.`);
+    }
+    if (reportInput.swellHeight < 0 || reportInput.swellHeight > 9) {
+         throw new Error(`Invalid swellHeight value: ${reportInput.swellHeight}. Must be between 0 and 9.`);
+    }
+    if (reportInput.distanceSinceLastReport < 0) {
+        throw new Error(`Invalid distanceSinceLastReport: ${reportInput.distanceSinceLastReport}. Must be >= 0.`);
+    }
+    if (reportInput.noonCourse < 0 || reportInput.noonCourse > 360) {
+        throw new Error(`Invalid noonCourse: ${reportInput.noonCourse}. Must be between 0 and 360.`);
+    }
+    if (reportInput.mePresentRpm !== undefined && reportInput.mePresentRpm !== null && reportInput.mePresentRpm < 0) {
+        throw new Error(`Invalid mePresentRpm value: ${reportInput.mePresentRpm}. Must be non-negative.`);
+    }
+    if (reportInput.meCurrentSpeed !== undefined && reportInput.meCurrentSpeed !== null && reportInput.meCurrentSpeed < 0) {
+        throw new Error(`Invalid meCurrentSpeed value: ${reportInput.meCurrentSpeed}. Must be non-negative.`);
+    }
+    // Add more checks for other BaseReportData fields if necessary
+
+    // 3. Validate Machinery 
+    validateMachineryInput(reportInput);
 }

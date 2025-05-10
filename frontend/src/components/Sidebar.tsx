@@ -28,6 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
   const isNoonEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA');
   // Corrected Arrival logic: Should only be enabled AT_SEA or DEPARTED (if first noon is skipped)
   const isArrivalEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA'); 
+  const isArrivalAnchorNoonEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'AT_SEA'); // Enable after arrival or if at sea (at anchor)
   const isBerthEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'BERTHED');
   // --- End Updated Logic ---
 
@@ -109,6 +110,16 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
             >
                <FileText size={18} className="mr-3" />
               Arrival Report
+            </NavLink>
+          </li>
+          <li>
+            <NavLink 
+              to="/captain/forms/arrival-anchor-noon" 
+              className={({ isActive }) => getNavLinkClass(isActive, isArrivalAnchorNoonEnabled)}
+              aria-disabled={!isArrivalAnchorNoonEnabled}
+            >
+               <FileText size={18} className="mr-3" />
+              Arr. Anchor Noon
             </NavLink>
           </li>
            <li>

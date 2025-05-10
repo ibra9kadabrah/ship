@@ -11,6 +11,7 @@ import DepartureForm from './components/forms/DepartureForm'; // Import actual f
 import NoonForm from './components/forms/NoonForm'; // Import actual form
 import ArrivalForm from './components/forms/ArrivalForm';
 import BerthForm from './components/forms/BerthForm';
+import ArrivalAnchorNoonForm from './components/forms/ArrivalAnchorNoonForm'; // Import new form
 import ReportHistory from './components/ReportHistory'; // Import the actual history component
 // Import new Office components (will be created later)
 import OfficeLayout from './layouts/OfficeLayout'; 
@@ -43,6 +44,7 @@ function App() {
               <Route path="forms/departure" element={<DepartureForm />} /> {/* Use actual form */}
               <Route path="forms/noon" element={<NoonForm />} /> {/* Add Noon route */}
               <Route path="forms/arrival" element={<ArrivalForm />} /> {/* Add Arrival route */}
+              <Route path="forms/arrival-anchor-noon" element={<ArrivalAnchorNoonForm />} /> {/* Add Arrival Anchor Noon route */}
               <Route path="forms/berth" element={<BerthForm />} /> {/* Add Berth route */}
               {/* Add other nested captain routes here if needed */}
             </Route>

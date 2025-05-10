@@ -1,7 +1,7 @@
 // src/types/report.ts
 
 // --- Enums and Basic Types ---
-export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth';
+export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth' | 'arrival_anchor_noon';
 export type ReportStatus = 'pending' | 'approved' | 'rejected';
 export type CardinalDirection = 'N' | 'NE' | 'NW' | 'E' | 'SE' | 'S' | 'W' | 'SW';
 export type CargoStatus = 'Loaded' | 'Empty';
@@ -312,6 +312,23 @@ export interface BerthSpecificData extends BaseReportData {
   // distanceSinceLastReport is not an input for Berth
 }
 
+// Arrival Anchor Noon Report Data (Similar to Noon, but no SOSP/ROSP/PassageState)
+export interface ArrivalAnchorNoonSpecificData extends BaseReportData {
+  reportType: 'arrival_anchor_noon';
+  distanceSinceLastReport: number; // Mandatory for this report type
+  // Noon fields are always required
+  noonDate: string; 
+  noonTime: string; 
+  noonLatDeg: number;
+  noonLatMin: number;
+  noonLatDir: 'N' | 'S';
+  noonLonDeg: number;
+  noonLonMin: number;
+  noonLonDir: 'E' | 'W';
+  noonCourse: number;
+  // All other fields from BaseReportData (weather, bunkers, machinery) are inherited
+}
+
 // --- Union Types ---
 
 // Union of all possible INPUT DTOs
@@ -319,7 +336,8 @@ export type CreateReportDTO =
   | DepartureSpecificData
   | NoonSpecificData
   | ArrivalSpecificData
-  | BerthSpecificData;
+  | BerthSpecificData
+  | ArrivalAnchorNoonSpecificData;
 
 // Union of all possible OUTPUT Report objects
 export type Report = BaseReport & (
@@ -327,6 +345,7 @@ export type Report = BaseReport & (
   | NoonSpecificData
   | ArrivalSpecificData
   | BerthSpecificData
+  | ArrivalAnchorNoonSpecificData
 );
 
 
