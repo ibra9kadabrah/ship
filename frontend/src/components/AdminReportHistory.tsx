@@ -141,63 +141,108 @@ const AdminReportHistory: React.FC = () => {
 
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-700">Complete Report History (Grouped by Voyage)</h2>
-        <div>
-          <label htmlFor="vesselFilter" className="mr-2 text-sm font-medium text-gray-700">Filter by Vessel:</label>
-          <select
-            id="vesselFilter"
-            name="vesselFilter"
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
-            value={selectedVesselId}
-            onChange={(e) => setSelectedVesselId(e.target.value)}
-            disabled={isLoadingVessels || !!errorVessels}
-          >
-            <option value="">All Ships</option>
-            {vessels.map((vessel) => (
-              <option key={vessel.id} value={vessel.id}>
-                {vessel.name}
-              </option>
-            ))}
-          </select>
-          {isLoadingVessels && <p className="text-xs text-gray-500 mt-1">Loading vessels...</p>}
-          {errorVessels && <p className="text-xs text-red-500 mt-1">Error loading vessels.</p>}
-        </div>
+  <div className="bg-white p-6 rounded-lg shadow">
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-xl font-semibold text-gray-700">
+        Complete Report History (Grouped by Voyage)
+      </h2>
+      <div>
+        <label
+          htmlFor="vesselFilter"
+          className="mr-2 text-sm font-medium text-gray-700"
+        >
+          Filter by Vessel:
+        </label>
+        <select
+          id="vesselFilter"
+          name="vesselFilter"
+          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+          value={selectedVesselId}
+          onChange={(e) => setSelectedVesselId(e.target.value)}
+          disabled={isLoadingVessels || !!errorVessels}
+        >
+          <option value="">All Ships</option>
+          {vessels.map((vessel) => (
+            <option key={vessel.id} value={vessel.id}>
+              {vessel.name}
+            </option>
+          ))}
+        </select>
+        {isLoadingVessels && (
+          <p className="text-xs text-gray-500 mt-1">Loading vessels...</p>
+        )}
+        {errorVessels && (
+          <p className="text-xs text-red-500 mt-1">Error loading vessels.</p>
+        )}
       </div>
+    </div>
 
-      {(isLoading || isLoadingVessels) && <p className="text-center text-gray-600">Loading data...</p>}
-      {error && <p className="text-center text-red-600 bg-red-100 p-3 rounded">Error loading reports: {error}</p>}
-      
-      {!isLoading && !error && allReports.length === 0 && !isLoadingVessels && (
-        <p className="text-center text-gray-500">No reports found for the selected filter.</p>
-      )}
+    {(isLoading || isLoadingVessels) && (
+      <p className="text-center text-gray-600">Loading data...</p>
+    )}
+    {error && (
+      <p className="text-center text-red-600 bg-red-100 p-3 rounded">
+        Error loading reports: {error}
+      </p>
+    )}
 
-      {!isLoading && !error && allReports.length > 0 && !isLoadingVessels && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report ID</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vessel</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Captain</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            {/* Iterate through sorted voyage keys */}
-            {sortedVoyageKeys.map((voyageKey, voyageIndex) => { 
-              const showExportButton = voyageKey !== 'unassigned' && isEffectivelyCompleted(voyageKey, voyageIndex);
+    {!isLoading && !error && allReports.length === 0 && !isLoadingVessels && (
+      <p className="text-center text-gray-500">
+        No reports found for the selected filter.
+      </p>
+    )}
 
-              return (
-              <tbody key={voyageKey} className="bg-white divide-y divide-gray-200 border-t-2 border-gray-300">
-                {/* Voyage Header Row */}
-                <tr className="bg-blue-50">
-                  <td colSpan={6} className="px-6 py-2 text-sm font-semibold text-blue-800"> 
-                    Voyage: {voyageKey === 'unassigned' ? 'Unassigned / Pending Departure Approval' : `${voyageKey.substring(0, 8)}...`}
-                    {showExportButton && <span className="ml-2 text-xs font-normal text-green-700">(Completed)</span>}
+    {!isLoading && !error && allReports.length > 0 && !isLoadingVessels && (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Report ID
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Type
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date &amp; Time
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Vessel
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Captain
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          {sortedVoyageKeys.map((voyageKey, voyageIndex) => {
+            const showExportButton =
+              voyageKey !== 'unassigned' &&
+              isEffectivelyCompleted(voyageKey, voyageIndex);
+            return (
+              <tbody
+                key={voyageKey}
+                className="bg-white divide-y divide-gray-200"
+              >
+                <tr className="bg-blue-50 border-t-2 border-gray-300">
+                  <td
+                    colSpan={6}
+                    className="px-6 py-2 text-sm font-semibold text-blue-800"
+                  >
+                    Voyage:{' '}
+                    {voyageKey === 'unassigned'
+                      ? 'Unassigned / Pending Departure Approval'
+                      : `${voyageKey.substring(0, 8)}...`}
+                    {showExportButton && (
+                      <span className="ml-2 text-xs font-normal text-green-700">
+                        (Completed)
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-2 text-sm text-right">
                     {showExportButton && (
@@ -216,32 +261,41 @@ const AdminReportHistory: React.FC = () => {
                         disabled={exportingVoyageId === voyageKey}
                         className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                       >
-                        {exportingVoyageId === voyageKey ? 'Exporting...' : 'Export MRV'}
+                        {exportingVoyageId === voyageKey
+                          ? 'Exporting...'
+                          : 'Export MRV'}
                       </button>
                     )}
                   </td>
                 </tr>
-                <React.Fragment> {/* Wrapper for conditional error and report rows */}
                 {exportingVoyageId === voyageKey && exportError && (
-                    <tr key={`${voyageKey}-export-error`}> {/* Added key to conditional row */}
-                        <td colSpan={7} className="px-6 py-1 text-xs text-red-600 bg-red-50">
-                            Export Error: {exportError}
-                        </td>
-                    </tr>
+                  <tr key={`${voyageKey}-export-error`}>
+                    <td
+                      colSpan={7}
+                      className="px-6 py-1 text-xs text-red-600 bg-red-50"
+                    >
+                      Export Error: {exportError}
+                    </td>
+                  </tr>
                 )}
-                {/* Reports within the voyage */}
                 {groupedReports[voyageKey].map((report) => (
                   <tr key={report.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{report.id.substring(0, 8)}...</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {report.id.substring(0, 8)}...
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {getReportTypeDisplayName(report.reportType)}
-                      {/* Conditionally display course for Noon reports */}
-                      {(report.reportType === 'noon' || report.reportType === 'arrival_anchor_noon') && (
+                      {(report.reportType === 'noon' ||
+                        report.reportType === 'arrival_anchor_noon') && (
                         <span className="ml-2 text-xs text-gray-400">
-                          (Course: {report.noonCourse ?? report.sospCourse ?? report.rospCourse ?? 'N/A'}°)
+                          (Course:{' '}
+                          {report.noonCourse ??
+                            report.sospCourse ??
+                            report.rospCourse ??
+                            'N/A'}
+                          °)
                         </span>
                       )}
-                      {/* Conditionally display berth number */}
                       {report.reportType === 'berth' && report.berthNumber && (
                         <span className="ml-2 text-xs text-gray-400">
                           (Berth: {report.berthNumber})
@@ -249,35 +303,46 @@ const AdminReportHistory: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        report.status === 'approved' ? 'bg-green-100 text-green-800' :
-                        report.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                        'bg-yellow-100 text-yellow-800' // pending
-                      }`}>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          report.status === 'approved'
+                            ? 'bg-green-100 text-green-800'
+                            : report.status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
                         {report.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {report.reportDate} {report.reportTime}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.vesselName || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.captainName || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {report.vesselName || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {report.captainName || 'N/A'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Link to={`/office/review/${report.id}`} className="text-indigo-600 hover:text-indigo-900">
+                      <Link
+                        to={`/office/review/${report.id}`}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
                         Details
                       </Link>
                     </td>
                   </tr>
                 ))}
-                </React.Fragment> {/* Wrapper End */}
               </tbody>
             );
-            })}
-          </table>
-        </div>
-      )}
-    </div>
-  );
+          })}
+        </table>
+      </div>
+    )}
+  </div>
+);
+
 };
 
 export default AdminReportHistory;

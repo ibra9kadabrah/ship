@@ -1,6 +1,9 @@
 // src/controllers/report.controller.ts
 import { Request, Response } from 'express';
 import { ReportService } from '../services/report.service'; // Import the service
+import { ExcelExportService } from '../services/excel_export.service'; // Import ExcelExportService
+import VoyageModel from '../models/voyage.model'; // Import VoyageModel
+import VesselModel from '../models/vessel.model'; // Import VesselModel
 import { CreateReportDTO, ReviewReportDTO, ReportType } from '../types/report'; // Use new DTO union
 
 // Define possible report types for runtime validation
@@ -156,9 +159,37 @@ export const ReportController = {
      }
    },
 
-    // Placeholder for Excel export
     async exportMRVExcel(req: Request, res: Response): Promise<void> {
-        res.status(501).json({ error: 'Excel export not implemented yet' }); // Not Implemented
+        try {
+            const { voyageId } = req.params;
+            if (!voyageId) {
+                res.status(400).json({ error: 'Voyage ID is required' });
+                return;
+            }
+
+            const excelBuffer = await ExcelExportService.exportMRVExcel(voyageId);
+
+            let fileName = `MRV_DCS_Report_Voyage_${voyageId.substring(0,8)}.xlsx`; // Default filename
+            const voyage = await VoyageModel.findById(voyageId);
+            if (voyage) {
+                const vessel = await VesselModel.findById(voyage.vesselId);
+                const vesselName = vessel?.name?.replace(/\s+/g, '_') || 'Vessel';
+                const voyageNum = voyage.voyageNumber?.replace(/[\/\s]+/g, '_') || voyageId.substring(0,8);
+                fileName = `MRV_DCS_Report_${vesselName}_Voy${voyageNum}.xlsx`;
+            }
+            
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            res.send(excelBuffer);
+
+        } catch (error: any) {
+            console.error('Error exporting MRV Excel:', error);
+            if (error.message.includes("not found")) {
+                res.status(404).json({ error: error.message });
+            } else {
+                res.status(500).json({ error: 'Failed to export MRV Excel report' });
+            }
+        }
     }
  };
 

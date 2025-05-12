@@ -54,6 +54,13 @@ export const VoyageModel = {
     
     return voyage || null;
   },
+
+  // Find all voyages by vessel ID
+  findAllByVesselId(vesselId: string): Voyage[] {
+    const stmt = db.prepare('SELECT * FROM voyages WHERE vesselId = ? ORDER BY createdAt ASC');
+    const voyages = stmt.all(vesselId) as Voyage[];
+    return voyages || [];
+  },
   
   // Complete voyage
   completeVoyage(id: string): boolean {

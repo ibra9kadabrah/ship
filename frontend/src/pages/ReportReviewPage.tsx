@@ -320,10 +320,11 @@ const ReportReviewPage: React.FC = () => {
 
       </div>
 
-      {/* Review Actions */}
-      <div className="bg-white p-6 rounded-lg shadow">
-         <h2 className="text-xl font-semibold mb-4">Review Action</h2>
-         <div className="mb-4">
+      {/* Review Actions - Only show if report is pending */}
+      {reportDetails.status === 'pending' && (
+        <div className="bg-white p-6 rounded-lg shadow">
+           <h2 className="text-xl font-semibold mb-4">Review Action</h2>
+           <div className="mb-4">
             <label htmlFor="reviewComments" className="block text-sm font-medium text-gray-700 mb-1">
                Review Comments (Optional)
             </label>
@@ -362,8 +363,9 @@ const ReportReviewPage: React.FC = () => {
             >
                {isSubmitting ? 'Submitting...' : 'Approve'}
             </button>
-         </div>
-      </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
