@@ -44,6 +44,7 @@ export const getCurrentVoyageDetails = async (req: Request, res: Response, next:
         const voyageDetails = {
             vesselName: vessel.name,
             vesselImoNumber: vessel.imoNumber,
+            vesselType: vessel.type, // Added vessel type
             vesselDeadweight: vessel.deadweight,
             voyageId: activeVoyage.id,
             departurePort: activeVoyage.departurePort,

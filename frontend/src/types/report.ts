@@ -10,7 +10,8 @@ export interface ReportHistoryItem {
   reportTime: string;
   reportType: ReportType;
   status: ReportStatus;
-  voyageId?: string | null; 
+  voyageId?: string | null;
+  vesselId: string; // Added vesselId
   // Add other relevant fields displayed in the history table if needed
   departurePort?: string | null;
   destinationPort?: string | null; 
@@ -268,6 +269,7 @@ export type ReportFormData =
 export interface CurrentVoyageDetails {
   vesselName?: string; // Added
   vesselImoNumber?: string; // Added
+  vesselType?: string; // Added vessel type
   vesselDeadweight?: number | null; // Added
   voyageId: string;
   departurePort: string;

@@ -93,5 +93,35 @@ export const getAllVessels = async (): Promise<Vessel[]> => {
   return response.data;
 };
 
+export const exportVoyageMRVExcel = async (voyageId: string): Promise<void> => {
+  try {
+    const response = await apiClient.get(`/reports/${voyageId}/export-mrv-excel`, {
+      responseType: 'blob', // Important for file downloads
+    });
+    // Create a blob link to download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    // Extract filename from content-disposition header if available, otherwise use a default
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `MRV_DCS_Voyage_${voyageId}.xlsx`; // Default filename
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+      if (filenameMatch && filenameMatch.length === 2) {
+        filename = filenameMatch[1];
+      }
+    }
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error('Error exporting MRV Excel:', error);
+    // Handle error appropriately in the UI, e.g., show a notification
+    throw error.response?.data || new Error('Failed to export MRV Excel report');
+  }
+};
+
 
 export default apiClient;

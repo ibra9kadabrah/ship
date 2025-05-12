@@ -7,14 +7,22 @@ interface CreateVesselPayload {
   name: string;
   flag: string;
   imoNumber: string;
+  type: string; 
   deadweight: number;
   captainId: string;
 }
+
+const vesselTypes = [
+  "Bulk Carrier", "Oil Tanker", "Chemical Tanker", "Gas Carrier", "LNG Carrier",
+  "Container Ship", "General Cargo Ship", "Refrigerated Cargo Carrier",
+  "Combination Carrier", "Ro-ro Ship", "Passenger Ship", "Other Cargo Ship"
+];
 
 const AddVesselForm: React.FC = () => {
   const [name, setName] = useState('');
   const [flag, setFlag] = useState('');
   const [imoNumber, setImoNumber] = useState('');
+  const [type, setType] = useState(''); // Initialize with empty string for default "Select" option
   const [deadweight, setDeadweight] = useState('');
   const [selectedCaptainId, setSelectedCaptainId] = useState('');
   
@@ -30,13 +38,8 @@ const AddVesselForm: React.FC = () => {
       setIsLoading(true);
       setFetchError(null);
       try {
-        // Corrected the API endpoint path
-        const response = await apiClient.get<User[]>('/auth/users?role=captain'); // Uses interceptor for admin token
+        const response = await apiClient.get<User[]>('/auth/users?role=captain');
         setCaptains(response.data);
-        if (response.data.length > 0) {
-          // Optionally pre-select the first captain
-          // setSelectedCaptainId(response.data[0].id); 
-        }
       } catch (err: any) {
         console.error('Error fetching captains:', err);
         setFetchError(err.response?.data?.error || 'Failed to fetch captains list.');
@@ -52,9 +55,8 @@ const AddVesselForm: React.FC = () => {
     setSubmitError(null);
     setSuccess(null);
 
-    // Basic validation
-    if (!name.trim() || !flag.trim() || !imoNumber.trim() || !deadweight.trim() || !selectedCaptainId) {
-      setSubmitError('All fields are required, including selecting a captain.');
+    if (!name.trim() || !flag.trim() || !imoNumber.trim() || !type.trim() || !deadweight.trim() || !selectedCaptainId) {
+      setSubmitError('All fields are required, including vessel type and selecting a captain.');
       return;
     }
     const dwtNumber = parseFloat(deadweight);
@@ -69,18 +71,18 @@ const AddVesselForm: React.FC = () => {
         name, 
         flag, 
         imoNumber, 
+        type, 
         deadweight: dwtNumber, 
         captainId: selectedCaptainId 
       };
-      await apiClient.post('/vessels', payload); // Uses interceptor for admin token
+      await apiClient.post('/vessels', payload); 
       setSuccess(`Successfully added vessel: ${name}`);
-      // Clear form
       setName('');
       setFlag('');
       setImoNumber('');
+      setType(''); 
       setDeadweight('');
       setSelectedCaptainId('');
-      // Optionally refetch captains if needed, though unlikely for this form
     } catch (err: any) {
       console.error('Error adding vessel:', err);
       setSubmitError(err.response?.data?.error || 'Failed to add vessel.');
@@ -107,7 +109,6 @@ const AddVesselForm: React.FC = () => {
         </div>
       )}
       
-      {/* Use grid for better layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="vessel-name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -152,21 +153,40 @@ const AddVesselForm: React.FC = () => {
           />
         </div>
         <div>
+          <label htmlFor="vessel-type" className="block text-sm font-medium text-gray-700 mb-1">
+            Vessel Type
+          </label>
+          <select
+            id="vessel-type"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            disabled={isLoading}
+          >
+            <option value="" disabled>-- Select Vessel Type --</option>
+            {vesselTypes.map((vesselType) => (
+              <option key={vesselType} value={vesselType}>
+                {vesselType}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label htmlFor="vessel-dwt" className="block text-sm font-medium text-gray-700 mb-1">
             Deadweight (DWT)
           </label>
           <input
             id="vessel-dwt"
-            type="number" // Use number type
+            type="number" 
             value={deadweight}
             onChange={(e) => setDeadweight(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             placeholder="e.g., 50000"
             disabled={isLoading}
-            min="0" // Prevent negative numbers
+            min="0" 
           />
         </div>
-        <div className="md:col-span-2"> {/* Span across two columns on medium screens */}
+        <div className="md:col-span-2"> 
           <label htmlFor="vessel-captain" className="block text-sm font-medium text-gray-700 mb-1">
             Assign Captain
           </label>
@@ -175,7 +195,7 @@ const AddVesselForm: React.FC = () => {
             value={selectedCaptainId}
             onChange={(e) => setSelectedCaptainId(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            disabled={isLoading || fetchError !== null || captains.length === 0} // Disable if loading, error, or no captains
+            disabled={isLoading || fetchError !== null || captains.length === 0} 
           >
             <option value="" disabled>
               {isLoading ? 'Loading captains...' : (fetchError ? 'Error loading' : (captains.length === 0 ? 'No captains available' : '-- Select a Captain --'))}
@@ -191,7 +211,7 @@ const AddVesselForm: React.FC = () => {
 
       <button
         type="submit"
-        disabled={isLoading || fetchError !== null} // Disable button if loading captains or error occurred
+        disabled={isLoading || fetchError !== null} 
         className={`w-full py-2 px-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition duration-150 ease-in-out ${
           (isLoading || fetchError !== null) ? 'opacity-70 cursor-not-allowed' : ''
         }`}

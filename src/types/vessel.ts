@@ -3,6 +3,7 @@ export interface Vessel {
     name: string;
     flag: string;
     imoNumber: string;
+    type: string; // Added vessel type
     deadweight: number;
     captainId: string;
     // Initial ROBs
@@ -22,6 +23,7 @@ export interface Vessel {
     name: string;
     flag: string;
     imoNumber: string;
+    type: string; // Added vessel type
     deadweight: number;
     captainId: string;
   }
@@ -30,6 +32,7 @@ export interface Vessel {
     name?: string;
     flag?: string;
     imoNumber?: string;
+    type?: string; // Added vessel type
     deadweight?: number;
     captainId?: string;
     isActive?: boolean;

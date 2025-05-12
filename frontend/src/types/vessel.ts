@@ -5,6 +5,7 @@ export interface VesselInfo {
   id: string;
   name: string;
   imoNumber: string;
+  type: string; // Added vessel type
   deadweight: number; // Added deadweight
   // Include initial ROB fields to check if they are set
   initialRobLsifo?: number | null;

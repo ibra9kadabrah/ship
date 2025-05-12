@@ -25,6 +25,7 @@ export function setupDatabase(): void {
       name TEXT NOT NULL,
       flag TEXT NOT NULL,
       imoNumber TEXT UNIQUE NOT NULL,
+      type TEXT NOT NULL, -- Added vessel type
       deadweight REAL NOT NULL,
       captainId TEXT,
       -- Initial ROB (Set only once on first departure report)
@@ -61,7 +62,7 @@ export function setupDatabase(): void {
       id TEXT PRIMARY KEY,
       voyageId TEXT NULL, -- Changed from NOT NULL to NULL
       vesselId TEXT NOT NULL,
-      reportType TEXT NOT NULL CHECK(reportType IN ('departure', 'noon', 'arrival', 'berth')),
+      reportType TEXT NOT NULL CHECK(reportType IN ('departure', 'noon', 'arrival', 'berth', 'arrival_anchor_noon')),
       status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
       captainId TEXT NOT NULL,
       reviewerId TEXT,

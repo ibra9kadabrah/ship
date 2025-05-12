@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { Link } from 'react-router-dom';
-import { getAllReports, getAllVessels } from '../services/api'; // Added getAllVessels
+import { getAllReports, getAllVessels, exportVoyageMRVExcel } from '../services/api'; // Added getAllVessels and exportVoyageMRVExcel
 import { ReportHistoryItem, ReportType } from '../types/report'; // Ensure ReportType is imported
 import { VesselInfo as Vessel } from '../types/vessel'; // Added Vessel type import
 
@@ -51,6 +51,8 @@ const AdminReportHistory: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoadingVessels, setIsLoadingVessels] = useState(true);
   const [errorVessels, setErrorVessels] = useState<string | null>(null);
+  const [exportingVoyageId, setExportingVoyageId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -108,6 +110,35 @@ const AdminReportHistory: React.FC = () => {
     });
   }, [groupedReports]);
 
+  // Helper function to determine if a voyage is effectively completed
+  const isEffectivelyCompleted = React.useCallback((
+    currentVoyKey: string,
+    currentIndex: number
+  ): boolean => {
+    if (currentVoyKey === 'unassigned') return false;
+
+    const currentVoyReports = groupedReports[currentVoyKey];
+    if (!currentVoyReports || currentVoyReports.length === 0) return false;
+    
+    const currentVesselId = currentVoyReports[0].vesselId;
+    if (!currentVesselId) return false; 
+
+    for (let i = currentIndex + 1; i < sortedVoyageKeys.length; i++) {
+      const nextVoyKey = sortedVoyageKeys[i];
+      const nextVoyReports = groupedReports[nextVoyKey];
+      if (nextVoyReports && nextVoyReports.length > 0) {
+        const firstReportOfNextVoyage = nextVoyReports[0];
+        if (
+          firstReportOfNextVoyage.vesselId === currentVesselId &&
+          firstReportOfNextVoyage.reportType === 'departure'
+        ) {
+          return true; 
+        }
+      }
+    }
+    return false;
+  }, [groupedReports, sortedVoyageKeys]);
+
 
   return (
     <div className="bg-white p-6 rounded-lg shadow">
@@ -157,14 +188,47 @@ const AdminReportHistory: React.FC = () => {
               </tr>
             </thead>
             {/* Iterate through sorted voyage keys */}
-            {sortedVoyageKeys.map((voyageKey) => (
+            {sortedVoyageKeys.map((voyageKey, voyageIndex) => { 
+              const showExportButton = voyageKey !== 'unassigned' && isEffectivelyCompleted(voyageKey, voyageIndex);
+
+              return (
               <tbody key={voyageKey} className="bg-white divide-y divide-gray-200 border-t-2 border-gray-300">
                 {/* Voyage Header Row */}
                 <tr className="bg-blue-50">
-                  <td colSpan={7} className="px-6 py-2 text-sm font-semibold text-blue-800"> {/* Increased colSpan */}
+                  <td colSpan={6} className="px-6 py-2 text-sm font-semibold text-blue-800"> 
                     Voyage: {voyageKey === 'unassigned' ? 'Unassigned / Pending Departure Approval' : `${voyageKey.substring(0, 8)}...`}
+                    {showExportButton && <span className="ml-2 text-xs font-normal text-green-700">(Completed)</span>}
+                  </td>
+                  <td className="px-6 py-2 text-sm text-right">
+                    {showExportButton && (
+                      <button
+                        onClick={async () => {
+                          setExportingVoyageId(voyageKey);
+                          setExportError(null);
+                          try {
+                            await exportVoyageMRVExcel(voyageKey);
+                          } catch (err: any) {
+                            setExportError(err.message || 'Failed to export');
+                          } finally {
+                            setExportingVoyageId(null);
+                          }
+                        }}
+                        disabled={exportingVoyageId === voyageKey}
+                        className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                      >
+                        {exportingVoyageId === voyageKey ? 'Exporting...' : 'Export MRV'}
+                      </button>
+                    )}
                   </td>
                 </tr>
+                <React.Fragment> {/* Wrapper for conditional error and report rows */}
+                {exportingVoyageId === voyageKey && exportError && (
+                    <tr key={`${voyageKey}-export-error`}> {/* Added key to conditional row */}
+                        <td colSpan={7} className="px-6 py-1 text-xs text-red-600 bg-red-50">
+                            Export Error: {exportError}
+                        </td>
+                    </tr>
+                )}
                 {/* Reports within the voyage */}
                 {groupedReports[voyageKey].map((report) => (
                   <tr key={report.id} className="hover:bg-gray-50">
@@ -205,8 +269,10 @@ const AdminReportHistory: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                </React.Fragment> {/* Wrapper End */}
               </tbody>
-            ))}
+            );
+            })}
           </table>
         </div>
       )}

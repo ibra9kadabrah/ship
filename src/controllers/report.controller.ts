@@ -154,7 +154,12 @@ export const ReportController = {
        console.error('Error fetching all reports:', error);
        res.status(500).json({ error: 'Failed to fetch all reports' });
      }
-   }
+   },
+
+    // Placeholder for Excel export
+    async exportMRVExcel(req: Request, res: Response): Promise<void> {
+        res.status(501).json({ error: 'Excel export not implemented yet' }); // Not Implemented
+    }
  };
 
 // Note: We might need to export ReportType if used directly in controller validation

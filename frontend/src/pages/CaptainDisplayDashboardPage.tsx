@@ -65,6 +65,7 @@ const CaptainDisplayDashboardPage: React.FC = () => {
   const {
     vesselName,
     vesselImoNumber,
+    vesselType, // Destructure vesselType
     vesselDeadweight,
     departurePort,
     destinationPort,
@@ -119,6 +120,7 @@ const CaptainDisplayDashboardPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-base">
               <p><strong className="font-medium text-gray-600">Name:</strong> {vesselName || 'N/A'}</p>
               <p><strong className="font-medium text-gray-600">IMO:</strong> {vesselImoNumber || 'N/A'}</p>
+              <p><strong className="font-medium text-gray-600">Type:</strong> {vesselType || 'N/A'}</p> 
               <p><strong className="font-medium text-gray-600">DWT:</strong> {vesselDeadweight ? `${vesselDeadweight} MT` : 'N/A'}</p>
             </div>
           </div> {/* This closes the Vessel Information Card correctly */}

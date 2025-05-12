@@ -17,4 +17,7 @@ router.patch('/:id/review', authenticate, authorizeOffice, ReportController.revi
 // Admin/Office route to get all reports
 router.get('/', authenticate, authorizeOffice, ReportController.getAllReports); // Changed middleware
 
+// Admin/Office route to export MRV Excel
+router.get('/:voyageId/export-mrv-excel', authenticate, authorizeOffice, ReportController.exportMRVExcel);
+
 export default router;

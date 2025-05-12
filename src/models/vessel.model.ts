@@ -18,8 +18,8 @@ export const VesselModel = {
     const now = new Date().toISOString();
     
     const stmt = db.prepare(`
-      INSERT INTO vessels (id, name, flag, imoNumber, deadweight, captainId, createdAt, updatedAt, isActive)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO vessels (id, name, flag, imoNumber, type, deadweight, captainId, createdAt, updatedAt, isActive)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
     
     stmt.run(
@@ -27,6 +27,7 @@ export const VesselModel = {
       vesselData.name,
       vesselData.flag,
       vesselData.imoNumber,
+      vesselData.type, // Added type
       vesselData.deadweight,
       vesselData.captainId,
       now,
@@ -41,7 +42,7 @@ export const VesselModel = {
     // Explicitly list columns to ensure new ones are included
     const stmt = db.prepare(`
       SELECT 
-        id, name, flag, imoNumber, deadweight, captainId, 
+        id, name, flag, imoNumber, type, deadweight, captainId, 
         initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
         createdAt, updatedAt, isActive 
       FROM vessels 
@@ -56,7 +57,7 @@ export const VesselModel = {
   findByImo(imoNumber: string): Vessel | null {
     const stmt = db.prepare(`
       SELECT 
-        id, name, flag, imoNumber, deadweight, captainId, 
+        id, name, flag, imoNumber, type, deadweight, captainId, 
         initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
         createdAt, updatedAt, isActive 
       FROM vessels 
@@ -71,7 +72,7 @@ export const VesselModel = {
   findAll(): Vessel[] {
     const stmt = db.prepare(`
       SELECT 
-        id, name, flag, imoNumber, deadweight, captainId, 
+        id, name, flag, imoNumber, type, deadweight, captainId, 
         initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
         createdAt, updatedAt, isActive 
       FROM vessels 
@@ -136,7 +137,11 @@ export const VesselModel = {
   // Search vessels
   search(searchTerm: string): Vessel[] {
     const stmt = db.prepare(`
-      SELECT * FROM vessels
+      SELECT 
+        id, name, flag, imoNumber, type, deadweight, captainId, 
+        initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
+        createdAt, updatedAt, isActive 
+      FROM vessels
       WHERE isActive = 1
       AND (
         name LIKE ?
@@ -194,7 +199,7 @@ export const VesselModel = {
   findByCaptainId(captainId: string): Vessel | null {
     const stmt = db.prepare(`
       SELECT 
-        id, name, flag, imoNumber, deadweight, captainId, 
+        id, name, flag, imoNumber, type, deadweight, captainId, 
         initialRobLsifo, initialRobLsmgo, initialRobCylOil, initialRobMeOil, initialRobAeOil,
         createdAt, updatedAt, isActive 
       FROM vessels 

@@ -4,9 +4,10 @@ import {
     Report, CreateReportDTO, ReportStatus, ReviewReportDTO, DepartureSpecificData,
     NoonSpecificData, ArrivalSpecificData, BerthSpecificData, ReportType,
     EngineUnitData, AuxEngineData, CardinalDirection, CargoStatus, BaseReportData,
-    PassageState, FullReportViewDTO // Import PassageState and FullReportViewDTO
+    PassageState, FullReportViewDTO, ArrivalAnchorNoonSpecificData // Import PassageState and FullReportViewDTO
 } from '../types/report';
 import { Voyage } from '../types/voyage';
+import { ExcelExportService } from './excel_export.service'; // Import ExcelExportService
 import { User } from '../types/user'; // Import User type
 import ReportModel from '../models/report.model';
 import VesselModel from '../models/vessel.model';
@@ -783,4 +784,12 @@ export const ReportService = {
         // No longer need the warning as the model now fetches names
         return reportsWithNames;
     },
+
+    // exportMRVExcel has been moved to excel_export.service.ts
+    // Add a wrapper if it needs to be exposed via ReportService, otherwise controller can call ExcelExportService directly.
+    // For now, assuming controller will be updated or this service will call the other.
+    // Let's add the wrapper for now to maintain the existing controller interface.
+    async exportMRVExcel(voyageId: string): Promise<Buffer> {
+        return ExcelExportService.exportMRVExcel(voyageId);
+    }
 };
