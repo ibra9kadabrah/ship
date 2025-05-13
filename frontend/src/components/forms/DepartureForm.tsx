@@ -1,8 +1,9 @@
 import React, { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import apiClient from '../../services/api';
+import apiClient, { getCarryOverCargoDetails } from '../../services/api'; // Import getCarryOverCargoDetails
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
+import { CarryOverCargo } from '../../types/voyage'; // Import CarryOverCargo
 import { DepartureSpecificData, BaseReportFormData, CardinalDirection, CargoStatus, EngineUnitData, AuxEngineData } from '../../types/report';
 import BunkerConsumptionSection from './sections/BunkerConsumptionSection';
 import BunkerSupplySection from './sections/BunkerSupplySection';
@@ -69,6 +70,12 @@ const DepartureForm: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isDeparturePortReadOnly, setIsDeparturePortReadOnly] = useState(false); // State for read-only status
+  const [carryOverCargo, setCarryOverCargo] = useState<CarryOverCargo | null>(null);
+  const [isLoadingCarryOver, setIsLoadingCarryOver] = useState(false);
+  const [carryOverError, setCarryOverError] = useState<string | null>(null);
+  const [isCargoTypeReadOnly, setIsCargoTypeReadOnly] = useState(false);
+  const [isCargoQuantityReadOnly, setIsCargoQuantityReadOnly] = useState(false);
+  const [isCargoStatusReadOnly, setIsCargoStatusReadOnly] = useState(false);
 
   // Form state - initialize with default/empty values
   const [formData, setFormData] = useState<Partial<DepartureFormData>>({
@@ -151,40 +158,95 @@ const DepartureForm: React.FC = () => {
     const fetchVessel = async () => {
       setIsLoadingVessel(true);
       setVesselError(null);
+      setIsLoadingCarryOver(true); // Start loading carry-over info
+      setCarryOverError(null);
       try {
         const response = await apiClient.get<VesselInfo>('/vessels/my-vessel');
         const fetchedVesselInfo = response.data;
-        console.log("Fetched Vessel Info:", fetchedVesselInfo); // Log fetched data
+        console.log("Fetched Vessel Info:", fetchedVesselInfo);
         setVesselInfo(fetchedVesselInfo);
 
-        // Pre-fill departure port and set read-only status if last destination exists
         if (fetchedVesselInfo.lastDestinationPort) {
-          console.log("Setting Departure Port from lastDestinationPort:", fetchedVesselInfo.lastDestinationPort); // Log pre-fill action
+          console.log("Setting Departure Port from lastDestinationPort:", fetchedVesselInfo.lastDestinationPort);
           setFormData(prev => ({
             ...prev,
-            departurePort: fetchedVesselInfo.lastDestinationPort || '' 
+            departurePort: fetchedVesselInfo.lastDestinationPort || ''
           }));
-          setIsDeparturePortReadOnly(true); // Set read-only to true
-          console.log("Set isDeparturePortReadOnly to true"); // Log state set
+          setIsDeparturePortReadOnly(true);
+          console.log("Set isDeparturePortReadOnly to true");
         } else {
-          setIsDeparturePortReadOnly(false); // Ensure it's false otherwise
-          console.log("Set isDeparturePortReadOnly to false"); // Log state set
+          setIsDeparturePortReadOnly(false);
+          console.log("Set isDeparturePortReadOnly to false");
         }
 
+        // Fetch carry-over cargo details if vessel ID is available
+        if (fetchedVesselInfo.id) {
+          try {
+            const cargo = await getCarryOverCargoDetails(fetchedVesselInfo.id);
+            setCarryOverCargo(cargo);
+            console.log("Fetched Carry Over Cargo:", cargo);
+          } catch (cargoErr: any) {
+            console.error("Error fetching carry-over cargo:", cargoErr);
+            // Don't block form for this, but log error. User can still input manually.
+            setCarryOverError(cargoErr.message || "Failed to load carry-over cargo details.");
+          }
+        }
       } catch (err: any) {
         console.error("Error fetching vessel info:", err);
         setVesselError(err.response?.data?.error || "Failed to load assigned vessel information.");
       } finally {
         setIsLoadingVessel(false);
+        setIsLoadingCarryOver(false); // Finish loading carry-over info
       }
     };
     if (user?.role === 'captain') {
       fetchVessel();
     } else {
-      setVesselError("User is not a captain."); // Should be caught by routing, but good practice
+      setVesselError("User is not a captain.");
       setIsLoadingVessel(false);
+      setIsLoadingCarryOver(false);
     }
-  }, [user]); // Re-fetch if user changes (e.g., logout/login)
+  }, [user]);
+
+  // Effect to pre-fill cargo details from carryOverCargo
+  useEffect(() => {
+    if (carryOverCargo && vesselInfo) {
+      console.log("Pre-filling cargo from carryOverCargo:", carryOverCargo);
+
+      const newCargoType = (carryOverCargo.lastCargoType !== null && carryOverCargo.lastCargoType !== undefined)
+        ? carryOverCargo.lastCargoType
+        : ''; // Default to empty string if null/undefined from carry-over
+
+      const newCargoQuantityStr = (carryOverCargo.lastCargoQuantity !== null && carryOverCargo.lastCargoQuantity !== undefined)
+        ? String(carryOverCargo.lastCargoQuantity)
+        : '0'; // Default to '0' string if null/undefined from carry-over
+      
+      const numericCargoQuantity = Number(newCargoQuantityStr);
+
+      const newCargoStatus: CargoStatus = numericCargoQuantity > 0 ? 'Loaded' : 'Empty';
+
+      setFormData(prev => ({
+        ...prev,
+        cargoType: newCargoType,
+        cargoQuantity: newCargoQuantityStr,
+        cargoStatus: newCargoStatus,
+      }));
+
+      // If carryOverCargo object exists, these fields are considered determined by it and made read-only.
+      setIsCargoTypeReadOnly(true);
+      setIsCargoQuantityReadOnly(true);
+      setIsCargoStatusReadOnly(true);
+      console.log(`Cargo fields pre-filled. Type: "${newCargoType}", Qty: "${newCargoQuantityStr}", Status: "${newCargoStatus}". Read-only: true.`);
+
+    } else if (vesselInfo) { // This condition means carryOverCargo is null, but vesselInfo is loaded
+      // No carry-over data, or vesselInfo not yet loaded (though latter less likely here)
+      // Ensure cargo fields are editable if they were previously made read-only by carry-over.
+      setIsCargoTypeReadOnly(false);
+      setIsCargoQuantityReadOnly(false);
+      setIsCargoStatusReadOnly(false);
+      console.log("No carry-over cargo data. Cargo fields are editable.");
+    }
+  }, [carryOverCargo, vesselInfo]); // Rerun if carryOverCargo or vesselInfo changes
 
   // Handle standard form input changes
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -245,6 +307,15 @@ const DepartureForm: React.FC = () => {
 
     // --- Input Format Validation ---
     const errors: string[] = [];
+
+    // Deadweight validation
+    if (vesselInfo && vesselInfo.deadweight && formData.cargoQuantity) {
+      const cargoQuantityNum = Number(formData.cargoQuantity);
+      if (!isNaN(cargoQuantityNum) && cargoQuantityNum > vesselInfo.deadweight) {
+        errors.push(`Cargo Quantity (${cargoQuantityNum} MT) cannot exceed vessel deadweight (${vesselInfo.deadweight} MT).`);
+      }
+    }
+
     const numericFields = [
         'voyageDistance', 'fwdDraft', 'aftDraft', 'cargoQuantity', 
         'faspLatDeg', 'faspLatMin', // Replaced faspLatitude
@@ -516,16 +587,49 @@ const DepartureForm: React.FC = () => {
                 <input type="number" step="0.01" id="aftDraft" name="aftDraft" value={formData.aftDraft} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
             </div>
              <div>
-                <label htmlFor="cargoQuantity" className="block text-sm font-medium text-gray-700">Cargo Quantity (MT)</label>
-                <input type="number" id="cargoQuantity" name="cargoQuantity" value={formData.cargoQuantity} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                <label htmlFor="cargoQuantity" className="block text-sm font-medium text-gray-700">
+                  Cargo Quantity (MT) {isCargoQuantityReadOnly ? '(from carry-over)' : ''}
+                </label>
+                <input
+                  type="number"
+                  id="cargoQuantity"
+                  name="cargoQuantity"
+                  value={formData.cargoQuantity}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                  readOnly={isCargoQuantityReadOnly}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isCargoQuantityReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                />
             </div>
              <div>
-                <label htmlFor="cargoType" className="block text-sm font-medium text-gray-700">Cargo Type</label>
-                <input type="text" id="cargoType" name="cargoType" value={formData.cargoType} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                <label htmlFor="cargoType" className="block text-sm font-medium text-gray-700">
+                  Cargo Type {isCargoTypeReadOnly ? '(from carry-over)' : ''}
+                </label>
+                <input
+                  type="text"
+                  id="cargoType"
+                  name="cargoType"
+                  value={formData.cargoType}
+                  onChange={handleChange}
+                  required
+                  readOnly={isCargoTypeReadOnly}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isCargoTypeReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                />
             </div>
              <div>
-                <label htmlFor="cargoStatus" className="block text-sm font-medium text-gray-700">Cargo Status</label>
-                <select id="cargoStatus" name="cargoStatus" value={formData.cargoStatus} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">
+                <label htmlFor="cargoStatus" className="block text-sm font-medium text-gray-700">
+                  Cargo Status {isCargoStatusReadOnly ? '(from carry-over)' : ''}
+                </label>
+                <select
+                  id="cargoStatus"
+                  name="cargoStatus"
+                  value={formData.cargoStatus}
+                  onChange={handleChange}
+                  required
+                  disabled={isCargoStatusReadOnly} // Use disabled for select for better UX with read-only
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isCargoStatusReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                >
                     <option value="Loaded">Loaded</option>
                     <option value="Empty">Empty</option>
                 </select>

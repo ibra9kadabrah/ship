@@ -1,7 +1,9 @@
 // src/models/voyage.model.ts
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db/connection';
-import { Voyage, CreateVoyageDTO, VoyageStatus } from '../types/voyage';
+import { Voyage, CreateVoyageDTO, VoyageStatus, VoyageWithCargo } from '../types/voyage';
+import ReportModel, { ReportRecordData } from './report.model'; // Import ReportRecordData
+import { CargoStatus } from '../types/report';
 
 export const VoyageModel = {
   // Create a new voyage
@@ -100,6 +102,71 @@ export const VoyageModel = {
     `);
     const voyage = stmt.get(vesselId) as Voyage | undefined;
     return voyage || null;
+  },
+
+  // Find the latest completed voyage for a specific vessel, including its last cargo state
+  findLatestCompletedWithCargoByVesselId(vesselId: string): VoyageWithCargo | null {
+    const stmt = db.prepare(`
+      SELECT *
+      FROM voyages
+      WHERE vesselId = ? AND status = 'completed'
+      ORDER BY createdAt DESC
+      LIMIT 1
+    `);
+    const voyage = stmt.get(vesselId) as Voyage | undefined;
+
+    if (!voyage) {
+      return null;
+    }
+
+    // Get the last approved report for this completed voyage
+    const lastReportData = ReportModel.getLatestApprovedReportForVoyage(voyage.id);
+
+    if (!lastReportData) {
+      // If no last report, assume no cargo carried over from this voyage
+      return { ...voyage, lastCargoQuantity: 0, lastCargoStatus: 'Empty', lastCargoType: null };
+    }
+    
+    let cargoQuantity: number = 0;
+    let cargoType: string | null = null;
+    let determinedCargoStatus: CargoStatus | null = 'Empty';
+
+    if (lastReportData) {
+        const lastReport = lastReportData as ReportRecordData; // Cast to access all table columns
+
+        if (lastReport.cargoQuantity !== undefined && lastReport.cargoQuantity !== null) {
+            cargoQuantity = lastReport.cargoQuantity;
+        }
+
+        if (cargoQuantity > 0) {
+            determinedCargoStatus = 'Loaded'; // Default if quantity > 0
+            if (lastReport.cargoStatus) { // If a specific status is on the last report, use it
+                determinedCargoStatus = lastReport.cargoStatus;
+            }
+        } else {
+            determinedCargoStatus = 'Empty';
+        }
+        
+        if (lastReport.cargoType) {
+            cargoType = lastReport.cargoType;
+        } else {
+            // Attempt to get from the first report of the voyage if not on the last one
+            const firstReportData = ReportModel.getFirstReportForVoyage(voyage.id);
+            if (firstReportData) {
+                const firstReport = firstReportData as ReportRecordData;
+                if (firstReport.cargoType) {
+                    cargoType = firstReport.cargoType;
+                }
+            }
+        }
+    }
+
+    return {
+      ...voyage,
+      lastCargoQuantity: cargoQuantity,
+      lastCargoStatus: determinedCargoStatus,
+      lastCargoType: cargoType,
+    };
   }
 };
 

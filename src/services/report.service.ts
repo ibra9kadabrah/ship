@@ -101,6 +101,12 @@ export const ReportService = {
         const reportId = uuidv4();
 
         // --- Pre-validation steps ---
+
+        // --- 0. Check if captain already has ANY pending reports for this vessel ---
+        if (ReportModel.hasPendingReports(captainId, reportInput.vesselId)) {
+            throw new Error(`Cannot submit new report: Captain ${captainId} already has a pending report for vessel ${reportInput.vesselId}.`);
+        }
+
         // --- 1. Fetch Vessel ---
         const vessel = VesselModel.findById(reportInput.vesselId);
         if (!vessel) throw new Error(`Vessel with ID ${reportInput.vesselId} not found.`);
@@ -603,41 +609,8 @@ export const ReportService = {
 
             // 3. Check if approving the first-ever departure report
             let robUpdateSuccess = true; // Assume success unless update is needed and fails
-            if (reviewData.status === 'approved' && reportToReview.reportType === 'departure') {
-                const vessel = VesselModel.findById(reportToReview.vesselId as string);
-                if (!vessel) {
-                    throw new Error(`Associated vessel ${reportToReview.vesselId} not found for report ${id}.`);
-                }
-                // Check if vessel's initial ROBs are still null
-                if (vessel.initialRobLsifo === null) { 
-                    console.log(`Approving the first departure report (${id}) for vessel ${vessel.id}. Updating initial ROBs.`);
-                    
-                    // Extract initial ROBs from the report data
-                    // Extract initial ROBs from the report data fetched from the DB
-                    // ReportModel.findById now selects these new columns
-                    const initialRobData = {
-                        initialRobLsifo: reportToReview.initialRobLsifo, 
-                        initialRobLsmgo: reportToReview.initialRobLsmgo,
-                        initialRobCylOil: reportToReview.initialRobCylOil,
-                        initialRobMeOil: reportToReview.initialRobMeOil,
-                        initialRobAeOil: reportToReview.initialRobAeOil,
-                    };
-                    // Filter out any null/undefined values
-                    const validInitialRobData = Object.fromEntries(
-                         Object.entries(initialRobData).filter(([_, v]) => v !== null && v !== undefined)
-                    );
-
-                    if (Object.keys(validInitialRobData).length > 0) {
-                         robUpdateSuccess = VesselModel.updateInitialRob(vessel.id, validInitialRobData);
-                         if (!robUpdateSuccess) {
-                             // Error will be thrown after transaction attempt
-                             console.error(`Failed to update initial ROB for vessel ${vessel.id} while approving report ${id}.`);
-                         }
-                    } else {
-                         console.warn(`First departure report ${id} approved, but no initial ROB data found in the report record to update vessel ${vessel.id}.`);
-                    }
-                }
-            }
+            // Voyage Creation/Completion/Linking Logic will also handle ROB update if it's the first approved departure.
+            // The ROB update logic is now consolidated within the main "if (approved && departure)" block below.
 
             // --- NEW: Voyage Creation/Completion/Linking Logic on Departure Approval ---
             let newVoyageId: string | null = null; // To store the ID if a new voyage is created
@@ -711,16 +684,19 @@ export const ReportService = {
                      const validInitialRobData = Object.fromEntries(
                           Object.entries(initialRobData).filter(([_, v]) => v !== null && v !== undefined)
                      );
+                     
+                     console.log(`[ReportService.reviewReport] Vessel ${vesselId} - First approved departure. Initial ROB data from report ${id}:`, JSON.stringify(initialRobData));
+                     console.log(`[ReportService.reviewReport] Vessel ${vesselId} - Validated initial ROB data for update:`, JSON.stringify(validInitialRobData));
 
                      if (Object.keys(validInitialRobData).length > 0) {
                           robUpdateSuccess = VesselModel.updateInitialRob(vesselId, validInitialRobData);
                           if (!robUpdateSuccess) {
                               // Error will be thrown later when checking flags
-                              console.error(`Failed to update initial ROB for vessel ${vesselId} while approving report ${id}.`);
+                              console.error(`[ReportService.reviewReport] Failed to update initial ROB for vessel ${vesselId} while approving report ${id}.`);
                           }
                      } else {
                           // This might happen if the first departure report somehow didn't have initial ROBs saved
-                          console.warn(`First departure report ${id} approved, but no initial ROB data found in the report record to update vessel ${vesselId}.`);
+                          console.warn(`[ReportService.reviewReport] First departure report ${id} approved, but no initial ROB data found in the report record to update vessel ${vesselId}.`);
                      }
                  }
             }
@@ -731,6 +707,7 @@ export const ReportService = {
             const statusUpdateSuccess = ReportModel.reviewReport(id, reviewData, reviewerId);
 
             // 5. Check results and throw if necessary to rollback transaction
+            // robUpdateSuccess is now set within the consolidated block (lines 722-726)
             if (!robUpdateSuccess) {
                  throw new Error(`Failed to update initial ROB for vessel ${reportToReview.vesselId}.`);
             }

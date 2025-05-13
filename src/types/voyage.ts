@@ -1,4 +1,6 @@
 // voyage.ts
+import { CargoStatus } from './report'; // Import CargoStatus
+
 export type VoyageStatus = 'active' | 'completed';
 
 export interface Voyage {
@@ -15,16 +17,22 @@ export interface Voyage {
   updatedAt: string;
 }
 
+export interface VoyageWithCargo extends Voyage {
+  lastCargoQuantity?: number;
+  lastCargoType?: string | null;
+  lastCargoStatus?: CargoStatus | null;
+}
+
 export interface CreateVoyageDTO {
     vesselId: string;
-    departurePort: string;  
-    destinationPort: string;  
-    voyageDistance: number;   
+    departurePort: string;
+    destinationPort: string;
+    voyageDistance: number;
     startDate: string;
   }
 
 // Represents the logical state of the voyage based on the latest report
-export type VoyageState = 
+export type VoyageState =
   | 'NO_VOYAGE_ACTIVE' // Ready for Departure
   | 'DEPARTED'         // After Departure, before first Noon/Arrival
   | 'AT_SEA'           // After first Noon, before Arrival

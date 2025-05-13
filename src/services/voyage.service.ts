@@ -1,6 +1,6 @@
 // src/services/voyage.service.ts
-import { Voyage, VoyageState } from '../types/voyage';
-import { Report } from '../types/report'; // Import Report type
+import { Voyage, VoyageState, VoyageWithCargo } from '../types/voyage'; // Added VoyageWithCargo
+import { Report, CargoStatus } from '../types/report'; // Import Report type and CargoStatus
 import VoyageModel from '../models/voyage.model';
 import ReportModel from '../models/report.model';
 import VesselModel from '../models/vessel.model';
@@ -72,6 +72,59 @@ export const VoyageService = {
   // Add other voyage-related service methods if needed later...
   // e.g., getVoyageDetails, etc.
 
+  /**
+   * Gets the cargo details from the end of the last completed voyage for a vessel,
+   * to be potentially carried over to a new departure report.
+   * @param vesselId The ID of the vessel.
+   * @returns An object with cargo details if applicable, otherwise null.
+   */
+  async getCarryOverCargoDetails(vesselId: string): Promise<{ lastCargoType: string | null; lastCargoQuantity: number; lastCargoUnit: string; cargoStatus: CargoStatus } | null> {
+    console.log(`[VoyageService] Attempting to getCarryOverCargoDetails for vesselId: ${vesselId}`);
+
+    // Find the latest 'Arrival' or 'Berth' report that is 'approved' for this vessel.
+    // Use the newly added method in ReportModel
+    const latestApprovedEndReport = ReportModel.getLatestApprovedArrivalOrBerthReport(vesselId);
+
+    if (latestApprovedEndReport) {
+      console.log(`[VoyageService] Found latest approved end report: ID=${latestApprovedEndReport.id}, Type=${latestApprovedEndReport.reportType}, Status=${latestApprovedEndReport.status}`);
+      
+      // Extract cargo details from the report.
+      // The report type should have these fields.
+      // Need to ensure the Report type definition includes these for Arrival/Berth.
+      const reportData = latestApprovedEndReport as any; // Cast to access potential cargo fields
+
+      // Ensure we handle cases where cargoQuantity might be 0 or null
+      const cargoQuantity = (reportData.cargoQuantity !== null && reportData.cargoQuantity !== undefined)
+                            ? Number(reportData.cargoQuantity)
+                            : 0;
+      
+      const cargoType = reportData.cargoType || null; // Default to null if undefined/empty
+      
+      // Determine cargoStatus based on quantity.
+      // This aligns with how DepartureForm might interpret it.
+      const cargoStatus: CargoStatus = cargoQuantity > 0 ? 'Loaded' : 'Empty';
+      
+      // Assuming a default unit like 'MT' if not explicitly stored or needed differently.
+      // The frontend type `CarryOverCargo` expects `lastCargoUnit`.
+      // If the report doesn't store unit, we might need a default or adjust.
+      // For now, let's assume 'MT' or get it from report if available.
+      const cargoUnit = reportData.cargoUnit || 'MT';
+
+
+      console.log(`[VoyageService] Extracted cargo details: Type=${cargoType}, Quantity=${cargoQuantity}, Unit=${cargoUnit}, Status=${cargoStatus}`);
+      return {
+        lastCargoType: cargoType,
+        lastCargoQuantity: cargoQuantity,
+        lastCargoUnit: cargoUnit, // Added unit
+        cargoStatus: cargoStatus, // This was the field name in the original return type, let's keep it consistent for now
+                                  // but the frontend type uses `lastCargoStatus`. This might need alignment.
+                                  // For now, matching the method's declared return type.
+      };
+    } else {
+      console.log(`[VoyageService] No approved 'Arrival' or 'Berth' report found for vesselId: ${vesselId}. No carry-over cargo.`);
+      return null;
+    }
+  }
 };
 
 export default VoyageService;

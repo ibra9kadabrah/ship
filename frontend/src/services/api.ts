@@ -34,6 +34,7 @@ apiClient.interceptors.request.use(
 // Assuming PendingReport and FullReportViewDTO will be defined in types/report.ts
 import { ReportHistoryItem, FullReportViewDTO } from '../types/report'; // Import FullReportViewDTO
 import { VesselInfo as Vessel } from '../types/vessel'; // Import VesselInfo and alias as Vessel
+import { CarryOverCargo } from '../types/voyage'; // Import CarryOverCargo type
 type PendingReport = ReportHistoryItem; // ReportHistoryItem now includes optional names
 // type FullReportViewPlaceholder = any; // Placeholder removed
 type ReviewPayload = { status: 'approved' | 'rejected'; reviewComments?: string };
@@ -123,5 +124,24 @@ export const exportVoyageMRVExcel = async (voyageId: string): Promise<void> => {
   }
 };
 
+/**
+ * Fetches carry-over cargo details for a specific vessel.
+ * @param vesselId - The ID of the vessel.
+ */
+export const getCarryOverCargoDetails = async (vesselId: string): Promise<CarryOverCargo | null> => {
+  try {
+    const response = await apiClient.get<CarryOverCargo | null>(`/voyages/carry-over-cargo/${vesselId}`);
+    return response.data;
+  } catch (error: any) {
+    console.error(`Error fetching carry-over cargo for vessel ${vesselId}:`, error);
+    // Return null or throw error based on how frontend wants to handle "not found" or errors
+    // For now, re-throwing to let the caller handle it.
+    // If a 404 (or 200 with null) for "no carry-over" is common, might return null directly.
+    if (error.response && error.response.status === 404) {
+        return null; // Or if API returns 200 with null for no data
+    }
+    throw error.response?.data || new Error('Failed to fetch carry-over cargo details');
+  }
+};
 
 export default apiClient;

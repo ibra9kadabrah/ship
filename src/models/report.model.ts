@@ -16,7 +16,7 @@ import {
 
 // Define a type for the flat data structure used for insertion by _createReportRecord
 // This should align EXACTLY with the columns defined in the 'reports' table schema
-type ReportRecordData = {
+export type ReportRecordData = { // Added export
     id: string;
     voyageId: string | null; // Allow null
     vesselId: string;
@@ -419,8 +419,8 @@ export const ReportModel = {
   // Find all reports submitted by a specific captain
   findByCaptainId(captainId: string): Partial<Report>[] {
     const stmt = db.prepare(`
-      SELECT * FROM reports 
-      WHERE captainId = ? AND status != 'rejected'
+      SELECT * FROM reports
+      WHERE captainId = ?
       ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
     `);
     return stmt.all(captainId) as Partial<Report>[];
@@ -437,7 +437,7 @@ export const ReportModel = {
       FROM reports r
       LEFT JOIN vessels v ON r.vesselId = v.id
       LEFT JOIN users u ON r.captainId = u.id
-      WHERE r.status != 'rejected'
+      WHERE r.status = 'approved'
     `;
     const params: any[] = [];
 
@@ -460,6 +460,21 @@ export const ReportModel = {
       FROM reports 
       WHERE vesselId = ? AND status = 'approved' AND reportType = 'departure'
       ORDER BY reportDate DESC, reportTime DESC, createdAt DESC 
+      LIMIT 1
+    `);
+    const report = stmt.get(vesselId) as Partial<Report> | undefined;
+    return report || null;
+  },
+
+  // Get latest *approved* 'Arrival' or 'Berth' report for a vessel
+  getLatestApprovedArrivalOrBerthReport(vesselId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT *
+      FROM reports
+      WHERE vesselId = ?
+        AND status = 'approved'
+        AND reportType IN ('arrival', 'berth')
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
       LIMIT 1
     `);
     const report = stmt.get(vesselId) as Partial<Report> | undefined;

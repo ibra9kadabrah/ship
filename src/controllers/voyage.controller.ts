@@ -95,3 +95,24 @@ export const getCurrentVoyageState = async (req: Request, res: Response, next: N
         next(error); // Pass error to the global error handler
     }
 };
+
+
+export const getCarryOverCargo = async (req: Request, res: Response, next: NextFunction) => {
+    const vesselId = req.params.vesselId;
+
+    if (!vesselId) {
+        return res.status(400).json({ message: 'Vessel ID is required.' });
+    }
+
+    try {
+        const cargoDetails = await VoyageService.getCarryOverCargoDetails(vesselId);
+        if (!cargoDetails) {
+            // It's not an error if no cargo is carried over, frontend can handle this
+            return res.status(200).json(null);
+        }
+        res.status(200).json(cargoDetails);
+    } catch (error) {
+        console.error(`Error fetching carry-over cargo for vessel ${vesselId}:`, error);
+        next(error);
+    }
+};
