@@ -294,8 +294,8 @@ export const ExcelExportService = {
         }
         // Ensure top header rows also have borders if missed by above loop
         for (let i = 1; i <= 8; i++) {
-            worksheet.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
-                if (!cell.border) cell.border = thinBorder; 
+            worksheet.getRow(i).eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
+                if (!cell.border) cell.border = thinBorder;
             });
         }
 
