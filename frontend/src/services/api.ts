@@ -34,7 +34,7 @@ apiClient.interceptors.request.use(
 // Assuming PendingReport and FullReportViewDTO will be defined in types/report.ts
 import { ReportHistoryItem, FullReportViewDTO } from '../types/report'; // Import FullReportViewDTO
 import { VesselInfo as Vessel } from '../types/vessel'; // Import VesselInfo and alias as Vessel
-import { CarryOverCargo } from '../types/voyage'; // Import CarryOverCargo type
+import { CarryOverCargo } from '../types/voyage.ts'; // Import CarryOverCargo type, added .ts extension
 type PendingReport = ReportHistoryItem; // ReportHistoryItem now includes optional names
 // type FullReportViewPlaceholder = any; // Placeholder removed
 type ReviewPayload = { status: 'approved' | 'rejected'; reviewComments?: string };
