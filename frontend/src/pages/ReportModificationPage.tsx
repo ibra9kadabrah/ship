@@ -5,9 +5,9 @@ import { FullReportViewDTO, ReportType } from '../types/report';
 import DepartureForm from '../components/forms/DepartureForm';
 import NoonForm from '../components/forms/NoonForm';
 // Import other form components as they become available for modification
-// import ArrivalForm from '../components/forms/ArrivalForm';
+import ArrivalForm from '../components/forms/ArrivalForm'; // Uncommented
 // import BerthForm from '../components/forms/BerthForm';
-// import ArrivalAnchorNoonForm from '../components/forms/ArrivalAnchorNoonForm';
+import ArrivalAnchorNoonForm from '../components/forms/ArrivalAnchorNoonForm'; // Uncommented
 
 const ReportModificationPage: React.FC = () => {
   const { reportId } = useParams<{ reportId: string }>();
@@ -58,10 +58,10 @@ const ReportModificationPage: React.FC = () => {
         return <DepartureForm reportIdToModify={reportId} />;
       case 'noon':
         return <NoonForm reportIdToModify={reportId} />;
-      // case 'arrival_anchor_noon':
-      //   return <ArrivalAnchorNoonForm reportIdToModify={reportId} />;
-      // case 'arrival':
-      //   return <ArrivalForm reportIdToModify={reportId} />;
+      case 'arrival_anchor_noon':
+        return <ArrivalAnchorNoonForm reportIdToModify={reportId} />;
+      case 'arrival': // Uncommented
+        return <ArrivalForm reportIdToModify={reportId} />; // Uncommented
       // case 'berth':
       //   return <BerthForm reportIdToModify={reportId} />;
       default:

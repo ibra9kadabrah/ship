@@ -17,16 +17,24 @@ interface BunkerConsumptionData {
 interface BunkerConsumptionSectionProps {
   formData: BunkerConsumptionData;
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
-  isReadOnly?: boolean; // Add isReadOnly prop
-  // title prop removed
+  isReadOnly?: boolean; // Kept for direct readOnly control if needed
+  disabled?: boolean; // For disabling the whole section
+  isFieldEditable?: (fieldName: string) => boolean; // For fine-grained control
 }
 
 const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
   formData,
   handleChange,
-  isReadOnly = false, // Default to false
-  // title parameter removed
+  isReadOnly = false,
+  disabled = false,
+  isFieldEditable,
 }) => {
+  // Helper to determine if a specific field should be disabled
+  const getFieldDisabledState = (fieldName: string): boolean => {
+    if (disabled) return true; // Whole section is disabled
+    if (isFieldEditable) return !isFieldEditable(fieldName); // Use isFieldEditable if provided
+    return isReadOnly; // Fallback to isReadOnly
+  };
   return (
     <>
       <h4 className="font-medium mb-2 text-gray-800">Consumption</h4> {/* Static title */}
@@ -36,7 +44,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="meConsumptionLsifo" name="meConsumptionLsifo"
             value={formData.meConsumptionLsifo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('meConsumptionLsifo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('meConsumptionLsifo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -44,7 +52,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="meConsumptionLsmgo" name="meConsumptionLsmgo"
             value={formData.meConsumptionLsmgo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('meConsumptionLsmgo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('meConsumptionLsmgo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -52,7 +60,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.1" id="meConsumptionCylOil" name="meConsumptionCylOil"
             value={formData.meConsumptionCylOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('meConsumptionCylOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('meConsumptionCylOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -60,7 +68,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.1" id="meConsumptionMeOil" name="meConsumptionMeOil"
             value={formData.meConsumptionMeOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('meConsumptionMeOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('meConsumptionMeOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -68,7 +76,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.1" id="meConsumptionAeOil" name="meConsumptionAeOil"
             value={formData.meConsumptionAeOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('meConsumptionAeOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('meConsumptionAeOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -76,7 +84,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="boilerConsumptionLsifo" name="boilerConsumptionLsifo"
             value={formData.boilerConsumptionLsifo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('boilerConsumptionLsifo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('boilerConsumptionLsifo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -84,7 +92,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="boilerConsumptionLsmgo" name="boilerConsumptionLsmgo"
             value={formData.boilerConsumptionLsmgo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('boilerConsumptionLsmgo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('boilerConsumptionLsmgo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -92,7 +100,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="auxConsumptionLsifo" name="auxConsumptionLsifo"
             value={formData.auxConsumptionLsifo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('auxConsumptionLsifo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('auxConsumptionLsifo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -100,7 +108,7 @@ const BunkerConsumptionSection: React.FC<BunkerConsumptionSectionProps> = ({
           <input
             type="number" step="0.01" id="auxConsumptionLsmgo" name="auxConsumptionLsmgo"
             value={formData.auxConsumptionLsmgo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('auxConsumptionLsmgo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('auxConsumptionLsmgo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
       </div>

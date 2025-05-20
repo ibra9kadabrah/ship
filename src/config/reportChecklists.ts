@@ -310,15 +310,260 @@ export const noonChecklistItems: ChecklistItem[] = [
   },
 ];
 
+export const arrivalChecklistItems: ChecklistItem[] = [
+  {
+    id: 'arrival_general_info',
+    label: 'General Report Information',
+    fields_affected: ['reportDate', 'reportTime', 'timeZone'],
+    reportType: 'arrival',
+    category: 'General'
+  },
+  {
+    id: 'arrival_eosp_details',
+    label: 'End of Sea Passage (EOSP) Details',
+    fields_affected: [
+      'eospDate', 'eospTime', 'eospLatDeg', 'eospLatMin', 'eospLatDir',
+      'eospLonDeg', 'eospLonMin', 'eospLonDir', 'eospCourse'
+    ],
+    reportType: 'arrival',
+    category: 'EOSP'
+  },
+  {
+    id: 'arrival_weather_wind',
+    label: 'Weather - Wind (Direction/Force)',
+    fields_affected: ['windDirection', 'windForce'],
+    reportType: 'arrival',
+    category: 'Weather'
+  },
+  {
+    id: 'arrival_weather_sea',
+    label: 'Weather - Sea (Direction/State)',
+    fields_affected: ['seaDirection', 'seaState'],
+    reportType: 'arrival',
+    category: 'Weather'
+  },
+  {
+    id: 'arrival_weather_swell',
+    label: 'Weather - Swell (Direction/Height)',
+    fields_affected: ['swellDirection', 'swellHeight'],
+    reportType: 'arrival',
+    category: 'Weather'
+  },
+  {
+    id: 'arrival_bunker_me_cons',
+    label: 'Main Engine Bunker Consumption',
+    fields_affected: [
+      'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil',
+      'meConsumptionMeOil', 'meConsumptionAeOil'
+    ],
+    reportType: 'arrival',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'arrival_bunker_boiler_cons',
+    label: 'Boiler Bunker Consumption',
+    fields_affected: ['boilerConsumptionLsifo', 'boilerConsumptionLsmgo'],
+    reportType: 'arrival',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'arrival_bunker_aux_cons',
+    label: 'Auxiliary Engines Bunker Consumption',
+    fields_affected: ['auxConsumptionLsifo', 'auxConsumptionLsmgo'],
+    reportType: 'arrival',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'arrival_bunker_supplies',
+    label: 'Bunker Supplies',
+    fields_affected: [
+      'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil'
+    ],
+    reportType: 'arrival',
+    category: 'Bunker Supplies'
+  },
+  {
+    id: 'arrival_machinery_me_press_temp',
+    label: 'Machinery - ME Pressures & Temperatures',
+    fields_affected: ['meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp', 'meThrustBearingTemp'],
+    reportType: 'arrival',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'arrival_machinery_me_tc',
+    label: 'Machinery - ME Turbocharger Params',
+    fields_affected: ['meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut'],
+    reportType: 'arrival',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'arrival_machinery_me_run_perf',
+    label: 'Machinery - ME Running Hours & Performance',
+    fields_affected: ['meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed'],
+    reportType: 'arrival',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'arrival_machinery_engine_units',
+    label: 'Engine Units',
+    fields_affected: ['engineUnits'],
+    reportType: 'arrival',
+    category: 'Machinery Units'
+  },
+  {
+    id: 'arrival_machinery_aux_engines',
+    label: 'Auxiliary Engines',
+    fields_affected: ['auxEngines'],
+    reportType: 'arrival',
+    category: 'Machinery Aux'
+  },
+  {
+    id: 'arrival_performance_distance',
+    label: 'Distance Since Last Report',
+    fields_affected: ['distanceSinceLastReport'],
+    reportType: 'arrival',
+    category: 'Performance'
+  },
+  {
+    id: 'arrival_berth_details',
+    label: 'Estimated Berthing Details',
+    fields_affected: ['estimatedBerthingDate', 'estimatedBerthingTime'],
+    reportType: 'arrival',
+    category: 'Berth'
+  }
+];
+
+export const arrivalAnchorNoonChecklistItems: ChecklistItem[] = [
+  // General Info (from BaseReportData)
+  {
+    id: 'arrival_anchor_noon_general_info',
+    label: 'General Report Information',
+    fields_affected: ['reportDate', 'reportTime', 'timeZone'],
+    reportType: 'arrival_anchor_noon',
+    category: 'General'
+  },
+  // Noon Position & Course (from ArrivalAnchorNoonSpecificData)
+  {
+    id: 'arrival_anchor_noon_position_details',
+    label: 'Noon Position & Course Details',
+    fields_affected: [
+      'noonDate', 'noonTime',
+      'noonLatDeg', 'noonLatMin', 'noonLatDir',
+      'noonLonDeg', 'noonLonMin', 'noonLonDir',
+      'noonCourse'
+    ],
+    reportType: 'arrival_anchor_noon',
+    category: 'Navigation'
+  },
+  // Performance & Distance (from ArrivalAnchorNoonSpecificData)
+  {
+    id: 'arrival_anchor_noon_performance_distance',
+    label: 'Distance Since Last Report',
+    fields_affected: ['distanceSinceLastReport'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Performance'
+  },
+  // Weather (from BaseReportData - granular)
+  {
+    id: 'arrival_anchor_noon_weather_wind',
+    label: 'Weather - Wind',
+    fields_affected: ['windDirection', 'windForce'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Weather'
+  },
+  {
+    id: 'arrival_anchor_noon_weather_sea',
+    label: 'Weather - Sea',
+    fields_affected: ['seaDirection', 'seaState'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Weather'
+  },
+  {
+    id: 'arrival_anchor_noon_weather_swell',
+    label: 'Weather - Swell',
+    fields_affected: ['swellDirection', 'swellHeight'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Weather'
+  },
+  // Bunker Consumptions (from BaseReportData - granular)
+  {
+    id: 'arrival_anchor_noon_bunker_me_cons',
+    label: 'Bunker - ME Consumptions',
+    fields_affected: ['meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'arrival_anchor_noon_bunker_boiler_cons',
+    label: 'Bunker - Boiler Consumptions',
+    fields_affected: ['boilerConsumptionLsifo', 'boilerConsumptionLsmgo'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'arrival_anchor_noon_bunker_aux_cons',
+    label: 'Bunker - Aux Consumptions',
+    fields_affected: ['auxConsumptionLsifo', 'auxConsumptionLsmgo'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Bunker Consumptions'
+  },
+  // Bunker Supplies (from BaseReportData)
+  {
+    id: 'arrival_anchor_noon_bunker_supplies',
+    label: 'Bunker - Supplies',
+    fields_affected: ['supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Bunker Supplies'
+  },
+  // Machinery ME Params (from BaseReportData - granular)
+  {
+    id: 'arrival_anchor_noon_machinery_me_press_temp',
+    label: 'Machinery - ME Pressures & Temperatures',
+    fields_affected: ['meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp', 'meThrustBearingTemp'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'arrival_anchor_noon_machinery_me_tc',
+    label: 'Machinery - ME Turbocharger Params',
+    fields_affected: ['meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'arrival_anchor_noon_machinery_me_run_perf',
+    label: 'Machinery - ME Running Hours & Performance',
+    fields_affected: ['meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Machinery ME'
+  },
+  // Machinery Engine Units (from BaseReportData)
+  {
+    id: 'arrival_anchor_noon_machinery_engine_units',
+    label: 'Machinery - Engine Units Data',
+    fields_affected: ['engineUnits'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Machinery Units'
+  },
+  // Machinery Aux Engines (from BaseReportData)
+  {
+    id: 'arrival_anchor_noon_machinery_aux_engines',
+    label: 'Machinery - Aux Engines Data',
+    fields_affected: ['auxEngines'],
+    reportType: 'arrival_anchor_noon',
+    category: 'Machinery Aux'
+  }
+];
+
+export const CHECKLIST_ITEMS_BY_REPORT_TYPE: Record<ReportType, ChecklistItem[]> = {
+  'departure': departureChecklistItems,
+  'noon': noonChecklistItems,
+  'arrival': arrivalChecklistItems,
+  'berth': [], // Placeholder for berth checklist items
+  'arrival_anchor_noon': arrivalAnchorNoonChecklistItems,
+};
+
 // Example: How to get checklist for a specific report type
 export function getChecklistForReportType(reportType: ReportType): ChecklistItem[] {
-  switch (reportType) {
-    case 'departure':
-      return departureChecklistItems;
-    case 'noon':
-      return noonChecklistItems;
-    // Add cases for 'arrival', etc. as they are defined
-    default:
-      return [];
-  }
+  return CHECKLIST_ITEMS_BY_REPORT_TYPE[reportType] || [];
 }

@@ -775,6 +775,29 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
         </div>
       )}
 
+      {isModifyMode && (
+        <div className="my-4 p-4 border rounded bg-yellow-50 border-yellow-300">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Office Change Request</h3>
+          {officeChangesComment && (
+            <div className="mb-3">
+              <p className="font-medium text-yellow-700">Comment:</p>
+              <p className="text-yellow-900 whitespace-pre-wrap">{officeChangesComment}</p>
+            </div>
+          )}
+          {activeModificationChecklist.length > 0 && (
+            <div>
+              <p className="font-medium text-yellow-700">Requested changes for:</p>
+              <ul className="list-disc list-inside ml-4 text-yellow-900">
+                {activeModificationChecklist.map(itemId => {
+                  const item = departureChecklistItems.find(ci => ci.id === itemId);
+                  return <li key={itemId}>{item ? item.label : itemId}</li>;
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {submitError && <div className="p-3 bg-red-100 text-red-700 rounded">{submitError}</div>}
       {submitSuccess && <div className="p-3 bg-green-100 text-green-700 rounded">{submitSuccess}</div>}
 

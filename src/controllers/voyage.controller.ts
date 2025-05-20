@@ -29,15 +29,17 @@ export const getCurrentVoyageDetails = async (req: Request, res: Response, next:
             return res.status(404).json({ message: 'No active voyage found for this vessel.' });
         }
 
-        // 3. Find the first (Departure) report for this voyage to get initial cargo status
-        const departureReport = await ReportModel.getFirstReportForVoyage(activeVoyage.id);
-        if (!departureReport || departureReport.reportType !== 'departure') {
-            // This indicates an inconsistent state, as an active voyage should always have a departure report
-            console.error(`Inconsistent state: Active voyage ${activeVoyage.id} has no valid departure report.`);
-            return res.status(500).json({ message: 'Internal server error: Could not retrieve initial voyage details.' });
+        // 3. Find the approved Departure report associated with this active voyage
+        // An active voyage should be initiated by an approved departure report.
+        const departureReport = await ReportModel.findLatestApprovedDepartureReport(vessel.id);
+
+        // Check if this departure report actually belongs to the identified activeVoyage
+        if (!departureReport || departureReport.voyageId !== activeVoyage.id || departureReport.reportType !== 'departure') {
+            console.error(`Inconsistent state: Active voyage ${activeVoyage.id} for vessel ${vessel.id} does not have a valid, approved departure report linked to it. Found departure report ID: ${departureReport?.id}, linked to voyage: ${departureReport?.voyageId}, type: ${departureReport?.reportType}`);
+            return res.status(500).json({ message: 'Internal server error: Could not retrieve initial voyage details due to inconsistent voyage/report state.' });
         }
 
-        // 4. Fetch the latest approved report for progress data
+        // 4. Fetch the latest approved report for progress data (can be any type)
         const latestApprovedReport = await ReportModel.getLatestApprovedReportForVoyage(activeVoyage.id);
 
         // 5. Construct and send the response

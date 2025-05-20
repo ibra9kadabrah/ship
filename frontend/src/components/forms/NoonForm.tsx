@@ -569,6 +569,29 @@ const NoonForm: React.FC<NoonFormProps> = ({ reportIdToModify }) => {
 
           {renderVesselInfo()}
 
+          {isModifyMode && (
+            <div className="my-4 p-4 border rounded bg-yellow-50 border-yellow-300">
+              <h3 className="text-lg font-semibold text-yellow-800 mb-2">Office Change Request</h3>
+              {officeChangesComment && (
+                <div className="mb-3">
+                  <p className="font-medium text-yellow-700">Comment:</p>
+                  <p className="text-yellow-900 whitespace-pre-wrap">{officeChangesComment}</p>
+                </div>
+              )}
+              {activeModificationChecklist.length > 0 && (
+                <div>
+                  <p className="font-medium text-yellow-700">Requested changes for:</p>
+                  <ul className="list-disc list-inside ml-4 text-yellow-900">
+                    {activeModificationChecklist.map(itemId => {
+                      const item = getChecklistForReportType('noon').find(ci => ci.id === itemId);
+                      return <li key={itemId}>{item ? item.label : itemId}</li>;
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6 p-4 bg-white rounded shadow-md">
             <fieldset className="border p-4 rounded">
               <legend className="text-lg font-medium px-2">General Info</legend>

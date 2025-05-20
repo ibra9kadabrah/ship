@@ -14,15 +14,24 @@ interface BunkerSupplySectionProps {
   formData: BunkerSupplyData;
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   title: string; // e.g., "Supply (Since Last)" or "Bunkers Received"
-  isReadOnly?: boolean; // Add isReadOnly prop
+  isReadOnly?: boolean;
+  disabled?: boolean;
+  isFieldEditable?: (fieldName: string) => boolean;
 }
 
 const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
   formData,
   handleChange,
   title,
-  isReadOnly = false, // Default to false
+  isReadOnly = false,
+  disabled = false,
+  isFieldEditable,
 }) => {
+  const getFieldDisabledState = (fieldName: string): boolean => {
+    if (disabled) return true;
+    if (isFieldEditable) return !isFieldEditable(fieldName);
+    return isReadOnly;
+  };
   return (
     <>
       <h4 className="font-medium mb-2 text-gray-800">{title}</h4>
@@ -32,7 +41,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.01" id="supplyLsifo" name="supplyLsifo"
             value={formData.supplyLsifo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('supplyLsifo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('supplyLsifo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -40,7 +49,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.01" id="supplyLsmgo" name="supplyLsmgo"
             value={formData.supplyLsmgo ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('supplyLsmgo')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('supplyLsmgo') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -48,7 +57,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyCylOil" name="supplyCylOil"
             value={formData.supplyCylOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('supplyCylOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('supplyCylOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -56,7 +65,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyMeOil" name="supplyMeOil"
             value={formData.supplyMeOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('supplyMeOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('supplyMeOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -64,7 +73,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyAeOil" name="supplyAeOil"
             value={formData.supplyAeOil ?? ''} onChange={handleChange} required min="0"
-            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            readOnly={getFieldDisabledState('supplyAeOil')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${getFieldDisabledState('supplyAeOil') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
       </div>

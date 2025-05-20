@@ -5,14 +5,18 @@ import { AuxEngineData } from '../../../types/report'; // Assuming type is in th
 interface AuxEnginesSectionProps {
   auxEngines: AuxEngineData[];
   handleAuxEngineChange: (index: number, field: keyof Omit<AuxEngineData, 'engineName'>, value: string) => void;
-  isReadOnly?: boolean; // Add isReadOnly prop
+  isReadOnly?: boolean;
+  disabled?: boolean; // For disabling the whole section
 }
 
 const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
   auxEngines,
   handleAuxEngineChange,
-  isReadOnly = false, // Default to false
+  isReadOnly = false,
+  disabled = false,
 }) => {
+  // If the whole section is disabled, all inner fields are read-only.
+  const fieldReadOnly = isReadOnly || disabled;
   return (
     <>
       <h4 className="text-md font-semibold mb-2 text-gray-800">Auxiliary Engines (DG1, DG2, V1)</h4>
@@ -28,8 +32,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.load ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'load', e.target.value)}
                   min="0" max="100"
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -39,8 +43,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.kw ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'kw', e.target.value)}
                   min="0"
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -50,8 +54,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.foPress ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'foPress', e.target.value)}
                   min="0"
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -61,8 +65,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.lubOilPress ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'lubOilPress', e.target.value)}
                   min="0"
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -71,8 +75,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   type="number" step="0.1" id={`aux-${aux.engineName}-waterTemp`} name={`aux-${aux.engineName}-waterTemp`}
                   value={aux.waterTemp ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'waterTemp', e.target.value)}
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -82,8 +86,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.dailyRunHour ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'dailyRunHour', e.target.value)}
                   min="0" max="24"
-                  readOnly={isReadOnly}
-                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={fieldReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${fieldReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
             </div>
