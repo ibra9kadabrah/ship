@@ -19,6 +19,7 @@ import ReportAuxEngineModel from '../models/report_aux_engine.model';
 import { calculateTotalConsumptions, calculateCurrentRobs, PreviousRob, TotalConsumptions, BunkerSupplyInput, BunkerConsumptionInput } from './bunker_calculator';
 import { calculateDistances, DistanceCalculationInput, DistanceCalculationOutput } from './distance_calculator';
 import { validateReportInput, validateCargoAgainstVesselCapacity } from './report_validator';
+import { VoyageLifecycleService, PreviousVoyageFinalState } from './voyage_lifecycle.service'; // Added
 
 // Helper function to check if all required Initial ROBs are present
 function hasAllInitialRobs(data: CreateReportDTO): data is DepartureSpecificData & { initialRobLsifo: number; initialRobLsmgo: number; initialRobCylOil: number; initialRobMeOil: number; initialRobAeOil: number; } {
@@ -118,39 +119,58 @@ export const ReportService = {
 
         // --- 2. Determine Voyage and Previous Report ---
         let voyageToUse: Voyage | undefined = undefined; // Use undefined initially
-        let previousReport: Partial<Report> | null = null;
-        let previousActiveVoyage: Voyage | null = null; // To potentially complete
+        let previousReportForCalculations: Partial<Report> | null = null; // Renamed for clarity
         let voyageIdToUse: string | null = null; // Use null initially
-        let createNewVoyage = false; // Flag to create voyage in transaction
+        let previousVoyageState: PreviousVoyageFinalState | null = null; // For departure defaults
 
         const activeVoyageCheck = VoyageModel.findActiveByVesselId(reportInput.vesselId);
 
         if (reportInput.reportType === 'departure') {
-            createNewVoyage = true; // Default to creating a new voyage for departure
-            if (activeVoyageCheck) {
-                // If an active voyage exists, check its last report type
-                const latestReportForActiveVoyage = ReportModel.getLatestReportForVoyage(activeVoyageCheck.id);
-                if (latestReportForActiveVoyage && (latestReportForActiveVoyage.reportType === 'arrival' || latestReportForActiveVoyage.reportType === 'berth')) {
-                    // Previous voyage ended (arrival/berth), okay to start a new one.
-                    // Mark the previous one as completed later in the transaction.
-                    previousActiveVoyage = activeVoyageCheck; 
-                    createNewVoyage = true;
-                } else if (latestReportForActiveVoyage) { 
-                    // Active voyage exists and didn't end with arrival/berth. 
-                    throw new Error(`Cannot submit departure report: An active voyage (${activeVoyageCheck.id}) is already in progress for this vessel and did not end with Arrival or Berth.`);
+            // Fetch previous voyage final state for defaults
+            previousVoyageState = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(reportInput.vesselId);
+
+            if (previousVoyageState) {
+                console.log(`[ReportService.submitReport] Previous voyage state found for vessel ${reportInput.vesselId}:`, previousVoyageState);
+                // Apply defaults if not provided in DTO
+                if (reportInput.cargoQuantity === undefined && previousVoyageState.cargoQuantity !== null) {
+                    reportInput.cargoQuantity = previousVoyageState.cargoQuantity;
                 }
-                // If activeVoyageCheck exists but latestReport is null (edge case?), allow new voyage creation.
-            } 
-            // Note: Voyage creation is deferred to transaction. voyageIdToUse remains null for now.
-            previousReport = ReportModel.getLatestReportForVessel(vessel.id); // Get latest overall for vessel ROB calculation
+                if (reportInput.cargoType === undefined && previousVoyageState.cargoType !== null) {
+                    reportInput.cargoType = previousVoyageState.cargoType;
+                }
+                if (reportInput.cargoStatus === undefined && previousVoyageState.cargoStatus !== null) {
+                    reportInput.cargoStatus = previousVoyageState.cargoStatus;
+                }
+            } else {
+                console.log(`[ReportService.submitReport] No previous voyage state found for vessel ${reportInput.vesselId}. Will rely on DTO or defaults for new voyage.`);
+            }
+            // Validate cargo quantity after potential defaulting
+            validateCargoAgainstVesselCapacity(reportInput.cargoQuantity ?? 0, vessel.deadweight, 'departure');
+
+
+            // For ROB calculations, previousReportForCalculations will be based on previousVoyageState or vessel's initial ROBs.
+            // If previousVoyageState exists, its associated report (last of prev voyage) is a candidate.
+            // Otherwise, the absolute latest report for the vessel is used.
+            if (previousVoyageState && previousVoyageState.reportId) {
+                 // Attempt to fetch the specific report that represents the final state of the previous voyage
+                const lastReportOfPrevVoyage = ReportModel.findById(previousVoyageState.reportId);
+                if (lastReportOfPrevVoyage) {
+                    previousReportForCalculations = lastReportOfPrevVoyage;
+                } else {
+                    // Fallback if the specific report isn't found (should be rare)
+                    previousReportForCalculations = ReportModel.getLatestReportForVessel(vessel.id);
+                }
+            } else {
+                previousReportForCalculations = ReportModel.getLatestReportForVessel(vessel.id);
+            }
         } else {
             // For Noon, Arrival, Berth - must link to the currently active voyage
             if (!activeVoyageCheck) {
                 throw new Error(`No active voyage found for vessel ${reportInput.vesselId}. Cannot submit ${reportInput.reportType} report.`);
             }
-            voyageToUse = activeVoyageCheck;
-            voyageIdToUse = voyageToUse.id; // Assign existing voyage ID
-            previousReport = ReportModel.getLatestReportForVoyage(voyageToUse.id); // Get latest for *this* voyage
+            voyageToUse = activeVoyageCheck; // voyageToUse is only relevant for non-departure reports here
+            voyageIdToUse = voyageToUse.id; // Assign existing voyage ID for non-departure
+            previousReportForCalculations = ReportModel.getLatestReportForVoyage(voyageToUse.id); // Get latest for *this* voyage
         }
 
         // --- Check for Pending Reports (BEFORE Validation) ---
@@ -176,15 +196,15 @@ export const ReportService = {
         }
 
         // Pass the correct previous report context AND previous noon state to the validator
-        // For departure, previousReport is latest for vessel (can be null)
-        // For others, previousReport is latest for the active voyage (should exist unless first noon)
+        // For departure, previousReportForCalculations is latest for vessel (can be null)
+        // For others, previousReportForCalculations is latest for the active voyage (should exist unless first noon)
         validateReportInput(
-            reportInput, 
+            reportInput,
             vessel, // Pass the fetched vessel object
-            previousReport, 
+            previousReportForCalculations,
             initialCargoStatusForValidation,
             previousNoonPassageState // Pass the previous noon state
-        ); 
+        );
 
         // --- 4. Determine Previous ROB & Handle Initial ROB Input ---
         const isFirstReportForVessel = vessel.initialRobLsifo === null;
@@ -196,28 +216,53 @@ export const ReportService = {
             if (!hasAllInitialRobs(reportInput)) throw new Error("Initial ROB values are required for the first report of this vessel.");
             
             initialRobInputData = {}; // Prepare to store input values
-             Object.keys(previousRob).forEach(key => {
+            Object.keys(previousRob).forEach(key => {
                 const robKey = `initialRob${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof DepartureSpecificData;
-                if (reportInput.reportType === 'departure' && reportInput[robKey] !== undefined) {
-                    (previousRob as any)[key] = reportInput[robKey] ?? 0; // Use input as previous for calculation
-                    (initialRobInputData as any)[robKey] = reportInput[robKey]; // Store input for saving to report record
+                if (reportInput.reportType === 'departure' && (reportInput as DepartureSpecificData)[robKey] !== undefined) {
+                    (previousRob as any)[key] = (reportInput as DepartureSpecificData)[robKey] ?? 0; // Use input as previous for calculation
+                    (initialRobInputData as any)[robKey] = (reportInput as DepartureSpecificData)[robKey]; // Store input for saving to report record
                 }
             });
+        } else if (reportInput.reportType === 'departure' && previousVoyageState) {
+            // This is a new voyage, and there was a previous completed voyage. Use its final ROBs.
+            previousRob.lsifo = previousVoyageState.finalRobLsifo ?? 0;
+            previousRob.lsmgo = previousVoyageState.finalRobLsmgo ?? 0;
+            previousRob.cylOil = previousVoyageState.finalRobCylOil ?? 0;
+            previousRob.meOil = previousVoyageState.finalRobMeOil ?? 0;
+            previousRob.aeOil = previousVoyageState.finalRobAeOil ?? 0;
+            // Store the initial ROBs from the DTO if provided, these are the "opening" ROBs for the new voyage
+            initialRobInputData = {
+                initialRobLsifo: (reportInput as DepartureSpecificData).initialRobLsifo,
+                initialRobLsmgo: (reportInput as DepartureSpecificData).initialRobLsmgo,
+                initialRobCylOil: (reportInput as DepartureSpecificData).initialRobCylOil,
+                initialRobMeOil: (reportInput as DepartureSpecificData).initialRobMeOil,
+                initialRobAeOil: (reportInput as DepartureSpecificData).initialRobAeOil,
+            };
         } else {
-             // Use the correct previousReport based on whether it's departure or not
-             const reportToGetRobsFrom = previousReport; 
+             // For non-departure reports, or departure without previous voyage state (but not first for vessel)
+             const reportToGetRobsFrom = previousReportForCalculations;
              if (reportToGetRobsFrom) {
                 previousRob.lsifo = ('currentRobLsifo' in reportToGetRobsFrom && typeof reportToGetRobsFrom.currentRobLsifo === 'number') ? reportToGetRobsFrom.currentRobLsifo : 0;
                 previousRob.lsmgo = ('currentRobLsmgo' in reportToGetRobsFrom && typeof reportToGetRobsFrom.currentRobLsmgo === 'number') ? reportToGetRobsFrom.currentRobLsmgo : 0;
                 previousRob.cylOil = ('currentRobCylOil' in reportToGetRobsFrom && typeof reportToGetRobsFrom.currentRobCylOil === 'number') ? reportToGetRobsFrom.currentRobCylOil : 0;
                 previousRob.meOil = ('currentRobMeOil' in reportToGetRobsFrom && typeof reportToGetRobsFrom.currentRobMeOil === 'number') ? reportToGetRobsFrom.currentRobMeOil : 0;
                 previousRob.aeOil = ('currentRobAeOil' in reportToGetRobsFrom && typeof reportToGetRobsFrom.currentRobAeOil === 'number') ? reportToGetRobsFrom.currentRobAeOil : 0;
-            } else { // Should only happen if it's NOT the first report for vessel, but IS the first for the voyage
-                previousRob.lsifo = vessel.initialRobLsifo ?? 0; 
+            } else { // Fallback to vessel's initial ROBs if no other source (e.g., first report of a subsequent voyage if previousVoyageState was null)
+                previousRob.lsifo = vessel.initialRobLsifo ?? 0;
                 previousRob.lsmgo = vessel.initialRobLsmgo ?? 0;
                 previousRob.cylOil = vessel.initialRobCylOil ?? 0;
                 previousRob.meOil = vessel.initialRobMeOil ?? 0;
                 previousRob.aeOil = vessel.initialRobAeOil ?? 0;
+            }
+             // If it's a departure, capture initial ROBs from DTO for storage on the report record
+            if (reportInput.reportType === 'departure') {
+                initialRobInputData = {
+                    initialRobLsifo: (reportInput as DepartureSpecificData).initialRobLsifo,
+                    initialRobLsmgo: (reportInput as DepartureSpecificData).initialRobLsmgo,
+                    initialRobCylOil: (reportInput as DepartureSpecificData).initialRobCylOil,
+                    initialRobMeOil: (reportInput as DepartureSpecificData).initialRobMeOil,
+                    initialRobAeOil: (reportInput as DepartureSpecificData).initialRobAeOil,
+                };
             }
         }
 
@@ -256,9 +301,9 @@ export const ReportService = {
             reportType: reportInput.reportType,
             harbourDistance: reportInput.reportType === 'departure' ? reportInput.harbourDistance : undefined,
             // Only include distanceSinceLastReport for Noon and Arrival reports
-            distanceSinceLastReport: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival') && 'distanceSinceLastReport' in reportInput ?
-                reportInput.distanceSinceLastReport : undefined,
-            previousReportData: previousReport,
+            distanceSinceLastReport: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival' || reportInput.reportType === 'arrival_anchor_noon') && 'distanceSinceLastReport' in reportInput ?
+                (reportInput as NoonSpecificData | ArrivalSpecificData | ArrivalAnchorNoonSpecificData).distanceSinceLastReport : undefined,
+            previousReportData: previousReportForCalculations,
             voyageDistance: distanceCalcVoyageDistance
         };
         const distances = calculateDistances(distanceInput);
@@ -329,33 +374,33 @@ export const ReportService = {
 
             // --- Distance calculation adjustment for first berth report ---
             // (Keep existing logic for distance calculation)
-            if (previousReport?.reportType !== 'berth') {
+            if (previousReportForCalculations?.reportType !== 'berth') { // Corrected variable name
                  const arrivalReport = ReportModel.getLatestReportForVoyageByType(voyageIdToUse!, 'arrival');
                  if (!arrivalReport) {
                      console.warn(`No preceding arrival report found for voyage ${voyageIdToUse!} when calculating first berth report distance. Using previous report's distance.`);
-                     calculatedTotalDistance = previousReport!.totalDistanceTravelled ?? 0; 
-                     calculatedDistanceToGo = previousReport!.distanceToGo ?? (voyageToUse!.voyageDistance - (previousReport!.totalDistanceTravelled ?? 0));
+                     calculatedTotalDistance = previousReportForCalculations!.totalDistanceTravelled ?? 0;
+                     calculatedDistanceToGo = previousReportForCalculations!.distanceToGo ?? (voyageToUse!.voyageDistance - (previousReportForCalculations!.totalDistanceTravelled ?? 0));
                  } else {
                      const arrivalHarbourDistance = ('harbourDistance' in arrivalReport && typeof arrivalReport.harbourDistance === 'number') ? arrivalReport.harbourDistance : 0;
                      const arrivalTotalDistance = arrivalReport.totalDistanceTravelled ?? 0;
-                     calculatedTotalDistance = arrivalTotalDistance + arrivalHarbourDistance; 
+                     calculatedTotalDistance = arrivalTotalDistance + arrivalHarbourDistance;
                      calculatedDistanceToGo = voyageToUse!.voyageDistance - (calculatedTotalDistance ?? 0);
                  }
             } else {
-                 calculatedTotalDistance = previousReport!.totalDistanceTravelled ?? 0; 
-                 calculatedDistanceToGo = voyageToUse!.voyageDistance - (calculatedTotalDistance ?? 0); 
+                 calculatedTotalDistance = previousReportForCalculations!.totalDistanceTravelled ?? 0;
+                 calculatedDistanceToGo = voyageToUse!.voyageDistance - (calculatedTotalDistance ?? 0);
             }
         }
 
-        // Add initial ROBs input data to the record data if it's the first departure report
-        const initialRobFieldsForRecord = (isFirstReportForVessel && reportInput.reportType === 'departure' && initialRobInputData) 
-            ? { 
+        // Add initial ROBs input data to the record data if it's a departure report and data was captured
+        const initialRobFieldsForRecord = (reportInput.reportType === 'departure' && initialRobInputData)
+            ? {
                 initialRobLsifo: initialRobInputData.initialRobLsifo,
                 initialRobLsmgo: initialRobInputData.initialRobLsmgo,
                 initialRobCylOil: initialRobInputData.initialRobCylOil,
                 initialRobMeOil: initialRobInputData.initialRobMeOil,
                 initialRobAeOil: initialRobInputData.initialRobAeOil,
-              } 
+            }
             : {};
 
         // Construct the base record data, voyageId will be set in transaction
@@ -505,33 +550,55 @@ export const ReportService = {
          };
  
          // --- 7. Execute Transaction ---
-        const transaction = db.transaction(() => {
-            let finalVoyageId: string;
+        const transaction = db.transaction(async () => { // Made transaction async
+            let finalVoyageIdToAssociateWithReport: string;
 
-            // Determine voyageId for the report record
-            // For departure, it will be null initially. For others, use the active voyage ID.
-            const voyageIdForRecord = (reportInput.reportType === 'departure') ? null : voyageIdToUse!;
+            if (reportInput.reportType === 'departure') {
+                // Ensure reportInput is treated as DepartureSpecificData for ensureNewVoyageIsCreated
+                const createdOrEnsuredVoyage = await VoyageLifecycleService.ensureNewVoyageIsCreated(
+                    reportInput.vesselId,
+                    reportInput as Report & DepartureSpecificData // Cast, assuming it's populated enough
+                );
+                finalVoyageIdToAssociateWithReport = createdOrEnsuredVoyage.id;
+                console.log(`[ReportService.submitReport] Departure: Associated with new/ensured voyage ${finalVoyageIdToAssociateWithReport}`);
+            } else {
+                if (!voyageIdToUse) { // Should be set for non-departure from activeVoyageCheck
+                    throw new Error("Internal error: voyageIdToUse is not set for non-departure report within transaction.");
+                }
+                finalVoyageIdToAssociateWithReport = voyageIdToUse;
+                console.log(`[ReportService.submitReport] Non-Departure: Associated with existing voyage ${finalVoyageIdToAssociateWithReport}`);
+            }
             
-            // Update reportRecordData with the voyageId (or null) before saving
-            // Ensure the type of reportRecordDataBase allows voyageId to be null
-            // The ReportRecordData type in report.model.ts was updated to allow null
-            const fullReportRecordData = { ...reportRecordDataBase, voyageId: voyageIdForRecord };
+            const fullReportRecordData: ReportRecordData = {
+                ...reportRecordDataBase,
+                voyageId: finalVoyageIdToAssociateWithReport // Now always set
+            };
 
             // Insert the report record
-            ReportModel._createReportRecord(fullReportRecordData); 
+            ReportModel._createReportRecord(fullReportRecordData);
 
             // Insert machinery data - Skip Engine Units for Berth reports
-            if (reportInput.reportType !== 'berth' && reportInput.engineUnits?.length) { // Insert units only if not Berth
+            if (reportInput.reportType !== 'berth' && reportInput.engineUnits?.length) {
                 if (!ReportEngineUnitModel.createMany(reportId, reportInput.engineUnits)) {
                     throw new Error("Failed to create engine units");
                 }
             }
-            if (reportInput.auxEngines?.length) { // Insert aux engines (still relevant for Berth)
+            if (reportInput.auxEngines?.length) {
                 if (!ReportAuxEngineModel.createMany(reportId, reportInput.auxEngines)) {
                     throw new Error("Failed to create aux engines");
                 }
             }
-            return reportId;
+            // If it was a departure, and the report was created successfully,
+            // ensure its voyageId is updated if VoyageLifecycleService didn't do it (e.g. if report was passed without ID)
+            // This is a bit redundant if ensureNewVoyageIsCreated handles it, but as a safeguard:
+            if (reportInput.reportType === 'departure') {
+                const createdReportCheck = ReportModel.findById(reportId);
+                if (createdReportCheck && createdReportCheck.voyageId !== finalVoyageIdToAssociateWithReport) {
+                    ReportModel.updateVoyageId(reportId, finalVoyageIdToAssociateWithReport);
+                     console.log(`[ReportService.submitReport] Ensured report ${reportId} is linked to voyage ${finalVoyageIdToAssociateWithReport} post-creation.`);
+                }
+            }
+            return reportId; // Return reportId for fetching
         });
 
         try {

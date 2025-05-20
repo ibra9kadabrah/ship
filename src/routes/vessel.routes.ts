@@ -13,6 +13,7 @@ router.delete('/:id', authenticate, authorizeAdmin, VesselController.deleteVesse
 router.get('/', authenticate, authorizeOffice, VesselController.getAllVessels);
 router.get('/search', authenticate, authorizeOffice, VesselController.searchVessels);
 router.get('/my-vessel', authenticate, authorizeCaptain, VesselController.getMyVessel); // Added route for captain's vessel
+router.get('/:vesselId/previous-voyage-final-state', authenticate, authorizeCaptain, VesselController.getPreviousVoyageFinalState); // Added new route
 router.get('/:id', authenticate, authorizeOffice, VesselController.getVesselById);
 
 export default router;

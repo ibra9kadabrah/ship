@@ -3,6 +3,7 @@ import VesselModel from '../models/vessel.model';
 import VoyageModel from '../models/voyage.model'; // Import VoyageModel
 import ReportModel from '../models/report.model'; // Import ReportModel
 import { CreateVesselDTO, UpdateVesselDTO, Vessel } from '../types/vessel'; // Import Vessel type
+import { VoyageLifecycleService } from '../services/voyage_lifecycle.service'; // Added
 
 export const VesselController = {
   // Create a new vessel
@@ -169,6 +170,40 @@ export const VesselController = {
     } catch (error) {
       console.error('Error fetching assigned vessel:', error);
       res.status(500).json({ error: 'Failed to fetch assigned vessel' });
+    }
+  },
+
+  // Get final cargo and ROB state from the latest completed voyage for a vessel
+  async getPreviousVoyageFinalState(req: Request, res: Response): Promise<void> {
+    try {
+      const { vesselId } = req.params;
+      if (!vesselId) {
+        res.status(400).json({ error: 'Vessel ID is required' });
+        return;
+      }
+
+      const finalState = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(vesselId);
+
+      if (!finalState) {
+        // Not an error, could be the first voyage or no completed voyages yet
+        res.status(200).json({
+            message: 'No previous completed voyage final state found.',
+            cargoQuantity: null,
+            cargoType: null,
+            cargoStatus: null,
+            finalRobLsifo: null,
+            finalRobLsmgo: null,
+            finalRobCylOil: null,
+            finalRobMeOil: null,
+            finalRobAeOil: null,
+        });
+        return;
+      }
+
+      res.status(200).json(finalState);
+    } catch (error) {
+      console.error('Error fetching previous voyage final state:', error);
+      res.status(500).json({ error: 'Failed to fetch previous voyage final state' });
     }
   }
 };

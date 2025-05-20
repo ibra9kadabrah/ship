@@ -1,10 +1,10 @@
 import React, { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import apiClient, { getCarryOverCargoDetails, getReportById } from '../../services/api'; // Import getCarryOverCargoDetails and getReportById
+import apiClient, { getReportById } from '../../services/api'; // Removed getCarryOverCargoDetails
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
-import { CarryOverCargo } from '../../types/voyage'; // Import CarryOverCargo
-import { DepartureSpecificData, BaseReportFormData, CardinalDirection, CargoStatus, EngineUnitData, AuxEngineData, FullReportViewDTO } from '../../types/report'; // Added FullReportViewDTO
+// import { CarryOverCargo } from '../../types/voyage'; // Removed CarryOverCargo
+import { DepartureSpecificData, BaseReportFormData, CardinalDirection, CargoStatus, EngineUnitData, AuxEngineData, FullReportViewDTO, ReportType } from '../../types/report'; // Added FullReportViewDTO, ReportType
 import { departureChecklistItems, ChecklistItem } from '../../config/reportChecklists'; // Import checklist config
 import BunkerConsumptionSection from './sections/BunkerConsumptionSection';
 import BunkerSupplySection from './sections/BunkerSupplySection';
@@ -65,6 +65,22 @@ interface DepartureFormProps {
   reportIdToModify?: string;
 }
 
+// Interface for the data from /api/vessels/:vesselId/previous-voyage-final-state
+interface PreviousVoyageFinalStateData {
+  voyageId?: string;
+  reportId?: string;
+  reportType?: ReportType;
+  cargoQuantity: number | null;
+  cargoType: string | null;
+  cargoStatus: CargoStatus | null;
+  finalRobLsifo: number | null;
+  finalRobLsmgo: number | null;
+  finalRobCylOil: number | null;
+  finalRobMeOil: number | null;
+  finalRobAeOil: number | null;
+  message?: string; // For "not found" case
+}
+
 const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify }) => {
   const navigate = useNavigate(); // Initialize useNavigate
   const { user } = useAuth(); // Assuming captain is logged in
@@ -78,13 +94,11 @@ const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
-  const [isDeparturePortReadOnly, setIsDeparturePortReadOnly] = useState(false); // State for read-only status
-  const [carryOverCargo, setCarryOverCargo] = useState<CarryOverCargo | null>(null);
-  const [isLoadingCarryOver, setIsLoadingCarryOver] = useState(false);
-  const [carryOverError, setCarryOverError] = useState<string | null>(null);
-  const [isCargoTypeReadOnly, setIsCargoTypeReadOnly] = useState(false);
-  const [isCargoQuantityReadOnly, setIsCargoQuantityReadOnly] = useState(false);
-  const [isCargoStatusReadOnly, setIsCargoStatusReadOnly] = useState(false);
+  // const [isDeparturePortReadOnly, setIsDeparturePortReadOnly] = useState(false); // Removed, departure port should be editable for new voyage
+  const [previousVoyageStateData, setPreviousVoyageStateData] = useState<PreviousVoyageFinalStateData | null>(null);
+  const [isLoadingPreviousVoyageState, setIsLoadingPreviousVoyageState] = useState(false);
+  const [previousVoyageStateError, setPreviousVoyageStateError] = useState<string | null>(null);
+  // Removed isCargoTypeReadOnly, isCargoQuantityReadOnly, isCargoStatusReadOnly as defaults should be editable
   const [isLoadingReportToModify, setIsLoadingReportToModify] = useState(false);
 
 
@@ -169,37 +183,27 @@ const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify }) => {
     const fetchVessel = async () => {
       setIsLoadingVessel(true);
       setVesselError(null);
-      setIsLoadingCarryOver(true); // Start loading carry-over info
-      setCarryOverError(null);
+      setIsLoadingPreviousVoyageState(true);
+      setPreviousVoyageStateError(null);
       try {
-        const response = await apiClient.get<VesselInfo>('/vessels/my-vessel');
-        const fetchedVesselInfo = response.data;
+        const vesselResponse = await apiClient.get<VesselInfo>('/vessels/my-vessel');
+        const fetchedVesselInfo = vesselResponse.data;
         console.log("Fetched Vessel Info:", fetchedVesselInfo);
         setVesselInfo(fetchedVesselInfo);
 
-        if (fetchedVesselInfo.lastDestinationPort) {
-          console.log("Setting Departure Port from lastDestinationPort:", fetchedVesselInfo.lastDestinationPort);
-          setFormData(prev => ({
-            ...prev,
-            departurePort: fetchedVesselInfo.lastDestinationPort || ''
-          }));
-          setIsDeparturePortReadOnly(true);
-          console.log("Set isDeparturePortReadOnly to true");
-        } else {
-          setIsDeparturePortReadOnly(false);
-          console.log("Set isDeparturePortReadOnly to false");
-        }
+        // Departure port is manually entered for a new voyage as per refined plan.
+        // The logic for setting it from lastDestinationPort and making it read-only is removed.
+        // setIsDeparturePortReadOnly(false);
 
-        // Fetch carry-over cargo details if vessel ID is available
-        if (fetchedVesselInfo.id) {
+        // Fetch previous voyage final state if vessel ID is available and not in modify mode
+        if (fetchedVesselInfo.id && !isModifyMode) {
           try {
-            const cargo = await getCarryOverCargoDetails(fetchedVesselInfo.id);
-            setCarryOverCargo(cargo);
-            console.log("Fetched Carry Over Cargo:", cargo);
-          } catch (cargoErr: any) {
-            console.error("Error fetching carry-over cargo:", cargoErr);
-            // Don't block form for this, but log error. User can still input manually.
-            setCarryOverError(cargoErr.message || "Failed to load carry-over cargo details.");
+            const prevStateResponse = await apiClient.get<PreviousVoyageFinalStateData>(`/vessels/${fetchedVesselInfo.id}/previous-voyage-final-state`);
+            setPreviousVoyageStateData(prevStateResponse.data);
+            console.log("Fetched Previous Voyage Final State:", prevStateResponse.data);
+          } catch (prevStateErr: any) {
+            console.error("Error fetching previous voyage final state:", prevStateErr);
+            setPreviousVoyageStateError(prevStateErr.response?.data?.error || "Failed to load previous voyage state.");
           }
         }
       } catch (err: any) {
@@ -207,17 +211,20 @@ const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify }) => {
         setVesselError(err.response?.data?.error || "Failed to load assigned vessel information.");
       } finally {
         setIsLoadingVessel(false);
-        setIsLoadingCarryOver(false); // Finish loading carry-over info
+        setIsLoadingPreviousVoyageState(false);
       }
     };
-    if (user?.role === 'captain') {
+    if (user?.role === 'captain' && !isModifyMode) { // Only fetch this data if creating a new report
       fetchVessel();
+    } else if (isModifyMode) { // If modifying, don't fetch vessel/previous state, rely on report data
+        setIsLoadingVessel(false);
+        setIsLoadingPreviousVoyageState(false);
     } else {
-      setVesselError("User is not a captain.");
+      setVesselError("User is not a captain or form is in unexpected state.");
       setIsLoadingVessel(false);
-      setIsLoadingCarryOver(false);
+      setIsLoadingPreviousVoyageState(false);
     }
-  }, [user]);
+  }, [user, isModifyMode]); // Add isModifyMode to dependency array
 
   // Effect to fetch report details if in modify mode
   useEffect(() => {
@@ -320,46 +327,51 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
     }
   }, [reportIdToModify, isModifyMode]);
 
-  // Effect to pre-fill cargo details from carryOverCargo (only in new report mode)
+  // Effect to pre-fill cargo and ROB details from previousVoyageStateData (only in new report mode)
   useEffect(() => {
-    if (isModifyMode) return; // Don't run this effect if in modify mode
-    if (carryOverCargo && vesselInfo) {
-      console.log("Pre-filling cargo from carryOverCargo:", carryOverCargo);
+    if (isModifyMode || !previousVoyageStateData || previousVoyageStateData.message) return;
+    
+    console.log("Pre-filling from previousVoyageStateData:", previousVoyageStateData);
 
-      const newCargoType = (carryOverCargo.lastCargoType !== null && carryOverCargo.lastCargoType !== undefined)
-        ? carryOverCargo.lastCargoType
-        : ''; // Default to empty string if null/undefined from carry-over
+    const updates: Partial<DepartureFormData> = {};
 
-      const newCargoQuantityStr = (carryOverCargo.lastCargoQuantity !== null && carryOverCargo.lastCargoQuantity !== undefined)
-        ? String(carryOverCargo.lastCargoQuantity)
-        : '0'; // Default to '0' string if null/undefined from carry-over
-      
-      const numericCargoQuantity = Number(newCargoQuantityStr);
+    if (previousVoyageStateData.cargoType !== null && previousVoyageStateData.cargoType !== undefined) {
+      updates.cargoType = previousVoyageStateData.cargoType;
+    }
+    if (previousVoyageStateData.cargoQuantity !== null && previousVoyageStateData.cargoQuantity !== undefined) {
+      updates.cargoQuantity = String(previousVoyageStateData.cargoQuantity);
+    }
+    if (previousVoyageStateData.cargoStatus !== null && previousVoyageStateData.cargoStatus !== undefined) {
+      updates.cargoStatus = previousVoyageStateData.cargoStatus;
+    }
 
-      const newCargoStatus: CargoStatus = numericCargoQuantity > 0 ? 'Loaded' : 'Empty';
+    // Pre-fill initial ROBs
+    if (previousVoyageStateData.finalRobLsifo !== null && previousVoyageStateData.finalRobLsifo !== undefined) {
+      updates.initialRobLsifo = String(previousVoyageStateData.finalRobLsifo);
+    }
+    if (previousVoyageStateData.finalRobLsmgo !== null && previousVoyageStateData.finalRobLsmgo !== undefined) {
+      updates.initialRobLsmgo = String(previousVoyageStateData.finalRobLsmgo);
+    }
+    if (previousVoyageStateData.finalRobCylOil !== null && previousVoyageStateData.finalRobCylOil !== undefined) {
+      updates.initialRobCylOil = String(previousVoyageStateData.finalRobCylOil);
+    }
+    if (previousVoyageStateData.finalRobMeOil !== null && previousVoyageStateData.finalRobMeOil !== undefined) {
+      updates.initialRobMeOil = String(previousVoyageStateData.finalRobMeOil);
+    }
+    if (previousVoyageStateData.finalRobAeOil !== null && previousVoyageStateData.finalRobAeOil !== undefined) {
+      updates.initialRobAeOil = String(previousVoyageStateData.finalRobAeOil);
+    }
 
+    if (Object.keys(updates).length > 0) {
       setFormData(prev => ({
         ...prev,
-        cargoType: newCargoType,
-        cargoQuantity: newCargoQuantityStr,
-        cargoStatus: newCargoStatus,
+        ...updates,
       }));
-
-      // If carryOverCargo object exists, these fields are considered determined by it and made read-only.
-      setIsCargoTypeReadOnly(true);
-      setIsCargoQuantityReadOnly(true);
-      setIsCargoStatusReadOnly(true);
-      console.log(`Cargo fields pre-filled. Type: "${newCargoType}", Qty: "${newCargoQuantityStr}", Status: "${newCargoStatus}". Read-only: true.`);
-
-    } else if (vesselInfo) { // This condition means carryOverCargo is null, but vesselInfo is loaded
-      // No carry-over data, or vesselInfo not yet loaded (though latter less likely here)
-      // Ensure cargo fields are editable if they were previously made read-only by carry-over.
-      setIsCargoTypeReadOnly(false);
-      setIsCargoQuantityReadOnly(false);
-      setIsCargoStatusReadOnly(false);
-      console.log("No carry-over cargo data. Cargo fields are editable.");
+      console.log("Form data updated with previous voyage state:", updates);
     }
-  }, [carryOverCargo, vesselInfo]); // Rerun if carryOverCargo or vesselInfo changes
+    // Fields are editable by default, no need to manage read-only state here for these defaults.
+
+  }, [previousVoyageStateData, isModifyMode]);
 
   // Handle standard form input changes
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -827,17 +839,17 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
             <div>
                 {/* Update label and add readOnly attribute conditionally */}
                 <label htmlFor="departurePort" className="block text-sm font-medium text-gray-700">
-                  Departure Port {isDeparturePortReadOnly ? '(from last voyage)' : ''}
+                  Departure Port
                 </label>
-                <input 
-                  type="text" 
-                  id="departurePort" 
-                  name="departurePort" 
-                  value={formData.departurePort} 
-                  onChange={handleChange} 
-                  required 
-                  readOnly={isDeparturePortReadOnly} // Bind to state variable
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isDeparturePortReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`} // Style read-only field based on state
+                <input
+                  type="text"
+                  id="departurePort"
+                  name="departurePort"
+                  value={formData.departurePort}
+                  onChange={handleChange}
+                  required
+                  readOnly={isModifyMode && !isFieldEditable('departurePort')} // Editable for new, conditionally for modify
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('departurePort') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
             </div>
              <div>
@@ -873,7 +885,7 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
             </div>
              <div>
                 <label htmlFor="cargoQuantity" className="block text-sm font-medium text-gray-700">
-                  Cargo Quantity (MT) {(isModifyMode ? '' : (isCargoQuantityReadOnly ? '(from carry-over)' : ''))}
+                  Cargo Quantity (MT)
                 </label>
                 <input
                   type="number"
@@ -883,13 +895,13 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
                   onChange={handleChange}
                   required
                   min="0"
-                  readOnly={isModifyMode ? !isFieldEditable('cargoQuantity') : isCargoQuantityReadOnly}
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${(isModifyMode ? !isFieldEditable('cargoQuantity') : isCargoQuantityReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={isModifyMode && !isFieldEditable('cargoQuantity')}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoQuantity') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
             </div>
              <div>
                 <label htmlFor="cargoType" className="block text-sm font-medium text-gray-700">
-                  Cargo Type {(isModifyMode ? '' : (isCargoTypeReadOnly ? '(from carry-over)' : ''))}
+                  Cargo Type
                 </label>
                 <input
                   type="text"
@@ -898,13 +910,13 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
                   value={formData.cargoType}
                   onChange={handleChange}
                   required
-                  readOnly={isModifyMode ? !isFieldEditable('cargoType') : isCargoTypeReadOnly}
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${(isModifyMode ? !isFieldEditable('cargoType') : isCargoTypeReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={isModifyMode && !isFieldEditable('cargoType')}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoType') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
             </div>
              <div>
                 <label htmlFor="cargoStatus" className="block text-sm font-medium text-gray-700">
-                  Cargo Status {(isModifyMode ? '' : (isCargoStatusReadOnly ? '(from carry-over)' : ''))}
+                  Cargo Status
                 </label>
                 <select
                   id="cargoStatus"
@@ -912,8 +924,8 @@ console.log("[Modify Mode] Fetched report for modification. Raw report data:", J
                   value={formData.cargoStatus}
                   onChange={handleChange}
                   required
-                  disabled={isModifyMode ? !isFieldEditable('cargoStatus') : isCargoStatusReadOnly}
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${(isModifyMode ? !isFieldEditable('cargoStatus') : isCargoStatusReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  disabled={isModifyMode && !isFieldEditable('cargoStatus')}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !isFieldEditable('cargoStatus') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                     <option value="Loaded">Loaded</option>
                     <option value="Empty">Empty</option>
