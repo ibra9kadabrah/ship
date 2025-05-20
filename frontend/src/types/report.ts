@@ -1,7 +1,7 @@
 // Frontend-specific report types
 
 export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth' | 'arrival_anchor_noon';
-export type ReportStatus = 'pending' | 'approved' | 'rejected';
+export type ReportStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
 
 // Define the structure for report history items fetched from the backend
 export interface ReportHistoryItem {
@@ -487,4 +487,7 @@ export interface FullReportViewDTO extends Report {
   sailingTimeVoyage?: number | null;
   avgSpeedVoyage?: number | null;
   berthNumber?: string | null; // Added Berth Number
+  // Fields for modification workflow (from backend DTO)
+  modification_checklist?: string[] | null;
+  requested_changes_comment?: string | null;
 }

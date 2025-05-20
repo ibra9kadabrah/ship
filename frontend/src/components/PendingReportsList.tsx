@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPendingReports, getAllVessels } from '../services/api'; // Added getAllVessels
-import { ReportHistoryItem, ReportType } from '../types/report'; // Ensure ReportType is imported
+import { ReportHistoryItem, ReportType, ReportStatus } from '../types/report'; // Ensure ReportType and ReportStatus are imported
 import { VesselInfo as Vessel } from '../types/vessel'; // Added Vessel type import
 
 // Helper function to get display name for report types
@@ -18,9 +18,22 @@ const getReportTypeDisplayName = (type: ReportType): string => {
 
 // Define a more specific type for pending reports if needed, 
 // otherwise ReportHistoryItem might suffice if it includes necessary fields.
-type PendingReport = ReportHistoryItem & { 
-    vesselName?: string; // Add fields expected from backend if different
-    captainName?: string; 
+// ReportHistoryItem already includes status.
+type PendingReport = ReportHistoryItem & {
+    vesselName?: string;
+    captainName?: string;
+    // status: ReportStatus; // Already in ReportHistoryItem
+};
+
+// Helper function to get display name for report statuses
+const getReportStatusDisplayName = (status: ReportStatus): string => {
+  switch (status) {
+    case 'pending': return 'Pending Review';
+    case 'approved': return 'Approved';
+    case 'rejected': return 'Rejected';
+    case 'changes_requested': return 'Changes Requested';
+    default: return status;
+  }
 };
 
 const PendingReportsList: React.FC = () => {
@@ -112,6 +125,7 @@ const PendingReportsList: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vessel</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Captain</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
@@ -129,14 +143,23 @@ const PendingReportsList: React.FC = () => {
                     )}
                   </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                     {report.reportDate} {report.reportTime} 
+                     {report.reportDate} {report.reportTime}
                   </td>
                    {/* Display vesselName and captainName directly (they are optional in the type) */}
                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.vesselName}</td>
                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.captainName}</td>
+                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      report.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      report.status === 'changes_requested' ? 'bg-orange-100 text-orange-800' : // Example styling
+                      'bg-gray-100 text-gray-800' // Default/fallback
+                    }`}>
+                      {getReportStatusDisplayName(report.status)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link 
-                      to={`/office/review/${report.id}`} 
+                    <Link
+                      to={`/office/review/${report.id}`}
                       className="text-indigo-600 hover:text-indigo-900"
                     >
                       Review

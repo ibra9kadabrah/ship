@@ -5,11 +5,13 @@ import { EngineUnitData } from '../../../types/report'; // Assuming type is in t
 interface EngineUnitsSectionProps {
   engineUnits: EngineUnitData[];
   handleEngineUnitChange: (index: number, field: keyof Omit<EngineUnitData, 'unitNumber'>, value: string) => void;
+  isReadOnly?: boolean; // Add isReadOnly prop
 }
 
 const EngineUnitsSection: React.FC<EngineUnitsSectionProps> = ({
   engineUnits,
   handleEngineUnitChange,
+  isReadOnly = false, // Default to false
 }) => {
   return (
     <>
@@ -25,7 +27,8 @@ const EngineUnitsSection: React.FC<EngineUnitsSectionProps> = ({
                   type="number" step="1" id={`unit-${unit.unitNumber}-exhaustTemp`} name={`unit-${unit.unitNumber}-exhaustTemp`}
                   value={unit.exhaustTemp ?? ''}
                   onChange={(e) => handleEngineUnitChange(index, 'exhaustTemp', e.target.value)}
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -34,7 +37,8 @@ const EngineUnitsSection: React.FC<EngineUnitsSectionProps> = ({
                   type="number" step="0.1" id={`unit-${unit.unitNumber}-underPistonAir`} name={`unit-${unit.unitNumber}-underPistonAir`}
                   value={unit.underPistonAir ?? ''}
                   onChange={(e) => handleEngineUnitChange(index, 'underPistonAir', e.target.value)}
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -43,7 +47,8 @@ const EngineUnitsSection: React.FC<EngineUnitsSectionProps> = ({
                   type="number" step="0.1" id={`unit-${unit.unitNumber}-pcoOutletTemp`} name={`unit-${unit.unitNumber}-pcoOutletTemp`}
                   value={unit.pcoOutletTemp ?? ''}
                   onChange={(e) => handleEngineUnitChange(index, 'pcoOutletTemp', e.target.value)}
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -52,7 +57,8 @@ const EngineUnitsSection: React.FC<EngineUnitsSectionProps> = ({
                   type="number" step="0.1" id={`unit-${unit.unitNumber}-jcfwOutletTemp`} name={`unit-${unit.unitNumber}-jcfwOutletTemp`}
                   value={unit.jcfwOutletTemp ?? ''}
                   onChange={(e) => handleEngineUnitChange(index, 'jcfwOutletTemp', e.target.value)}
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
             </div>

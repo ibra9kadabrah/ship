@@ -5,11 +5,13 @@ import { AuxEngineData } from '../../../types/report'; // Assuming type is in th
 interface AuxEnginesSectionProps {
   auxEngines: AuxEngineData[];
   handleAuxEngineChange: (index: number, field: keyof Omit<AuxEngineData, 'engineName'>, value: string) => void;
+  isReadOnly?: boolean; // Add isReadOnly prop
 }
 
 const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
   auxEngines,
   handleAuxEngineChange,
+  isReadOnly = false, // Default to false
 }) => {
   return (
     <>
@@ -26,7 +28,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.load ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'load', e.target.value)}
                   min="0" max="100"
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -36,7 +39,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.kw ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'kw', e.target.value)}
                   min="0"
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -46,7 +50,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.foPress ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'foPress', e.target.value)}
                   min="0"
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -56,7 +61,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.lubOilPress ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'lubOilPress', e.target.value)}
                   min="0"
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -65,7 +71,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   type="number" step="0.1" id={`aux-${aux.engineName}-waterTemp`} name={`aux-${aux.engineName}-waterTemp`}
                   value={aux.waterTemp ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'waterTemp', e.target.value)}
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div>
@@ -75,7 +82,8 @@ const AuxEnginesSection: React.FC<AuxEnginesSectionProps> = ({
                   value={aux.dailyRunHour ?? ''}
                   onChange={(e) => handleAuxEngineChange(index, 'dailyRunHour', e.target.value)}
                   min="0" max="24"
-                  className="mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm"
+                  readOnly={isReadOnly}
+                  className={`mt-1 block w-full p-1 border border-gray-300 rounded shadow-sm text-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
             </div>

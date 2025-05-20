@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'; // Removed Outlet
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom'; // Removed Outlet, Added useParams
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -46,6 +46,7 @@ function App() {
               <Route path="forms/arrival" element={<ArrivalForm />} /> {/* Add Arrival route */}
               <Route path="forms/arrival-anchor-noon" element={<ArrivalAnchorNoonForm />} /> {/* Add Arrival Anchor Noon route */}
               <Route path="forms/berth" element={<BerthForm />} /> {/* Add Berth route */}
+              <Route path="modify-report/:reportId" element={<DepartureFormWrapper />} /> {/* Route for modifying a report */}
               {/* Add other nested captain routes here if needed */}
             </Route>
           </Route>
@@ -66,6 +67,12 @@ function App() {
     </AuthProvider>
   );
 }
+
+// Wrapper component to extract reportId from params and pass to DepartureForm
+const DepartureFormWrapper: React.FC = () => {
+  const { reportId } = useParams<{ reportId: string }>();
+  return <DepartureForm reportIdToModify={reportId} />;
+};
 
 // Helper component for default redirection
 const DefaultRedirect: React.FC = () => {

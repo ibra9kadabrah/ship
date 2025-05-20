@@ -63,11 +63,13 @@ export function setupDatabase(): void {
       voyageId TEXT NULL, -- Changed from NOT NULL to NULL
       vesselId TEXT NOT NULL,
       reportType TEXT NOT NULL CHECK(reportType IN ('departure', 'noon', 'arrival', 'berth', 'arrival_anchor_noon')),
-      status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
+      status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected', 'changes_requested')),
       captainId TEXT NOT NULL,
       reviewerId TEXT,
       reviewDate TEXT,
       reviewComments TEXT,
+      modification_checklist TEXT NULL,
+      requested_changes_comment TEXT NULL,
       
       -- General information
       reportDate TEXT NOT NULL, -- Already NOT NULL
@@ -257,6 +259,28 @@ export function setupDatabase(): void {
     }
   }
   // --- End Add berthNumber column ---
+
+  // --- Add modification_checklist column if it doesn't exist ---
+  try {
+    db.exec(`ALTER TABLE reports ADD COLUMN modification_checklist TEXT NULL`);
+    console.log("Added 'modification_checklist' column to 'reports' table.");
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column name')) {
+      console.error("Error adding 'modification_checklist' column:", error);
+    }
+  }
+  // --- End Add modification_checklist column ---
+
+  // --- Add requested_changes_comment column if it doesn't exist ---
+  try {
+    db.exec(`ALTER TABLE reports ADD COLUMN requested_changes_comment TEXT NULL`);
+    console.log("Added 'requested_changes_comment' column to 'reports' table.");
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column name')) {
+      console.error("Error adding 'requested_changes_comment' column:", error);
+    }
+  }
+  // --- End Add requested_changes_comment column ---
 
   // Create report_engine_units table
   db.exec(`

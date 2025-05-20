@@ -2,7 +2,7 @@
 
 // --- Enums and Basic Types ---
 export type ReportType = 'departure' | 'noon' | 'arrival' | 'berth' | 'arrival_anchor_noon';
-export type ReportStatus = 'pending' | 'approved' | 'rejected';
+export type ReportStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
 export type CardinalDirection = 'N' | 'NE' | 'NW' | 'E' | 'SE' | 'S' | 'W' | 'SW';
 export type CargoStatus = 'Loaded' | 'Empty';
 export type PassageState = 'NOON' | 'SOSP' | 'ROSP'; // Added PassageState
@@ -351,8 +351,10 @@ export type Report = BaseReport & (
 
 // --- Other Existing Types ---
 export interface ReviewReportDTO {
-  status: 'approved' | 'rejected';
+  status: ReportStatus; // Use the updated ReportStatus enum
   reviewComments?: string;
+  modification_checklist?: string[] | null; // Array of checklist item IDs
+  requested_changes_comment?: string | null;
 }
 
 // Enhanced DTO for viewing a report with related context
@@ -369,4 +371,7 @@ export type FullReportViewDTO = Report & { // Use type intersection instead of i
   sailingTimeVoyage?: number | null;
   avgSpeedVoyage?: number | null;
   berthNumber?: string | null; // Added Berth Number
+  // Fields for modification workflow
+  modification_checklist?: string[] | null; // Stored as JSON string in DB, parsed to array for DTO
+  requested_changes_comment?: string | null;
 }

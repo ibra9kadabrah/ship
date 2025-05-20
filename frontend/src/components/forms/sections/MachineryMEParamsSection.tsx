@@ -23,6 +23,7 @@ interface MachineryMEParamsSectionProps {
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   isTcRpm2Optional?: boolean; // Flag to control if TC#2 RPM is optional
   includeDailyRunHours?: boolean; // Flag to include ME Daily Run Hours (not in Departure)
+  isReadOnly?: boolean; // Add isReadOnly prop
 }
 
 const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
@@ -30,6 +31,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
   handleChange,
   isTcRpm2Optional = false, // Default to false (required) unless specified
   includeDailyRunHours = true, // Default to true (include) unless specified
+  isReadOnly = false, // Default to false
 }) => {
   return (
     <>
@@ -40,7 +42,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meFoPressure" name="meFoPressure"
             value={formData.meFoPressure ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -48,7 +50,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meLubOilPressure" name="meLubOilPressure"
             value={formData.meLubOilPressure ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -56,7 +58,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meFwInletTemp" name="meFwInletTemp"
             value={formData.meFwInletTemp ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -64,7 +66,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meLoInletTemp" name="meLoInletTemp"
             value={formData.meLoInletTemp ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -72,7 +74,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meScavengeAirTemp" name="meScavengeAirTemp"
             value={formData.meScavengeAirTemp ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -80,7 +82,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" id="meTcRpm1" name="meTcRpm1"
             value={formData.meTcRpm1 ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -91,7 +93,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
             type="number" id="meTcRpm2" name="meTcRpm2"
             value={formData.meTcRpm2 ?? ''} onChange={handleChange} min="0"
             required={!isTcRpm2Optional} // Only required if the flag is false
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -99,7 +101,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="1" id="meTcExhaustTempIn" name="meTcExhaustTempIn"
             value={formData.meTcExhaustTempIn ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -107,7 +109,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="1" id="meTcExhaustTempOut" name="meTcExhaustTempOut"
             value={formData.meTcExhaustTempOut ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -115,7 +117,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meThrustBearingTemp" name="meThrustBearingTemp"
             value={formData.meThrustBearingTemp ?? ''} onChange={handleChange} required
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         {includeDailyRunHours && (
@@ -124,7 +126,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
             <input
               type="number" step="0.1" id="meDailyRunHours" name="meDailyRunHours"
               value={formData.meDailyRunHours ?? ''} onChange={handleChange} required min="0" max="24"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+              readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             />
           </div>
         )}
@@ -134,7 +136,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="mePresentRpm" name="mePresentRpm"
             value={formData.mePresentRpm ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         {/* Added Current Speed Input */}
@@ -143,7 +145,7 @@ const MachineryMEParamsSection: React.FC<MachineryMEParamsSectionProps> = ({
           <input
             type="number" step="0.1" id="meCurrentSpeed" name="meCurrentSpeed"
             value={formData.meCurrentSpeed ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
       </div>

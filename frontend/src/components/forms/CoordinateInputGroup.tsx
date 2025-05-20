@@ -18,6 +18,7 @@ interface CoordinateInputGroupProps {
   minuteError?: string | null;
   directionError?: string | null;
   required?: boolean; // Add required prop
+  readOnly?: boolean; // Add readOnly prop
 }
 
 const CoordinateInputGroup: React.FC<CoordinateInputGroupProps> = ({
@@ -34,6 +35,7 @@ const CoordinateInputGroup: React.FC<CoordinateInputGroupProps> = ({
   minuteError,
   directionError,
   required = false, // Default to false
+  readOnly = false, // Default to false
 }) => {
   const hasError = degreeError || minuteError || directionError;
 
@@ -56,8 +58,9 @@ const CoordinateInputGroup: React.FC<CoordinateInputGroupProps> = ({
             step="1"
             className={`mt-1 block w-full px-3 py-2 border ${
               degreeError ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             required={required}
+            readOnly={readOnly}
           />
           {degreeError && <p className="mt-1 text-xs text-red-600">{degreeError}</p>}
         </div>
@@ -76,8 +79,9 @@ const CoordinateInputGroup: React.FC<CoordinateInputGroupProps> = ({
             step="0.001" // Allow decimals for minutes
             className={`mt-1 block w-full px-3 py-2 border ${
               minuteError ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             required={required}
+            readOnly={readOnly}
           />
           {minuteError && <p className="mt-1 text-xs text-red-600">{minuteError}</p>}
         </div>
@@ -91,8 +95,9 @@ const CoordinateInputGroup: React.FC<CoordinateInputGroupProps> = ({
             onChange={onDirectionChange}
             className={`mt-1 block w-full px-3 py-2 border ${
               directionError ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white`}
+            } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             required={required}
+            disabled={readOnly}
           >
             <option value="" disabled>Dir</option>
             {directionOptions.map((dir) => (

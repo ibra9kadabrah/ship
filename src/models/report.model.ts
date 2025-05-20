@@ -224,9 +224,9 @@ export const ReportModel = {
       FROM reports r
       LEFT JOIN vessels v ON r.vesselId = v.id
       LEFT JOIN users u ON r.captainId = u.id
-      WHERE r.status = ? 
+      WHERE r.status IN ('pending', 'changes_requested')
     `;
-    const params: any[] = ['pending'];
+    const params: any[] = []; // No longer need 'pending' here as it's in the IN clause
 
     if (vesselId) {
       sql += ` AND r.vesselId = ?`;
@@ -243,24 +243,39 @@ export const ReportModel = {
   // Review a report (approve or reject) - Updates the 'reports' table
   reviewReport(id: string, reviewData: ReviewReportDTO, reviewerId: string): boolean {
     const now = new Date().toISOString();
-    const stmt = db.prepare(`
-      UPDATE reports
-      SET status = ?, reviewerId = ?, reviewDate = ?, reviewComments = ?, updatedAt = ?
-      WHERE id = ? AND status = 'pending' -- Ensure we only review pending reports
-    `);
+    
+    let sql = `UPDATE reports SET status = ?, reviewerId = ?, reviewDate = ?, reviewComments = ?, updatedAt = ?`;
+    const params: any[] = [
+      reviewData.status,
+      reviewerId,
+      now,
+      reviewData.reviewComments || null, // Store null if empty/undefined
+      now
+    ];
+
+    if (reviewData.status === 'changes_requested') {
+      sql += `, modification_checklist = ?, requested_changes_comment = ?`;
+      // Assuming modification_checklist is an array of strings, store as JSON
+      params.push(reviewData.modification_checklist ? JSON.stringify(reviewData.modification_checklist) : null);
+      params.push(reviewData.requested_changes_comment || null);
+    } else {
+      // If not 'changes_requested', ensure these fields are cleared (or set to null)
+      // This is important if a report was previously 'changes_requested' and is now being approved/rejected.
+      sql += `, modification_checklist = NULL, requested_changes_comment = NULL`;
+    }
+
+    sql += ` WHERE id = ? AND status = 'pending'`; // Ensure we only review pending reports
+    params.push(id);
+
+    const stmt = db.prepare(sql);
 
     try {
-        const result = stmt.run(
-          reviewData.status,
-          reviewerId,
-          now,
-          reviewData.reviewComments || '', // Use empty string if null/undefined
-          now,
-          id
-        );
+        const result = stmt.run(...params);
         return result.changes > 0; // Return true if a row was updated
     } catch (error) {
         console.error(`Error reviewing report ${id}:`, error);
+        console.error("SQL:", sql);
+        console.error("Params:", params);
         return false;
     }
   },
@@ -479,6 +494,95 @@ export const ReportModel = {
     `);
     const report = stmt.get(vesselId) as Partial<Report> | undefined;
     return report || null;
+  },
+
+  // Update an existing report
+  update(id: string, data: Partial<ReportRecordData>): boolean {
+    console.log(`[Model.update] Called for reportId: ${id}`);
+    console.log(`[Model.update] Incoming 'data' payload:`, JSON.stringify(data, null, 2));
+    const now = new Date().toISOString();
+    const updateData = { ...data, updatedAt: now }; // This is the object whose properties will be checked
+    console.log(`[Model.update] 'updateData' (data + new updatedAt) for SQL generation:`, JSON.stringify(updateData, null, 2));
+
+    const DYNAMIC_FIELDS = [
+        // General Info
+        'reportDate', 'reportTime', 'timeZone', 'status', 'reviewerId', 'reviewDate', 'reviewComments',
+        'modification_checklist', 'requested_changes_comment',
+        // Voyage Details
+        'departurePort', 'destinationPort', 'voyageDistance', 'etaDate', 'etaTime',
+        // Drafts & Cargo
+        'fwdDraft', 'aftDraft', 'cargoQuantity', 'cargoType', 'cargoStatus',
+        // FASP
+        'faspDate', 'faspTime', 'faspLatDeg', 'faspLatMin', 'faspLatDir', 'faspLonDeg', 'faspLonMin', 'faspLonDir', 'faspCourse',
+        // Distance
+        'harbourDistance', 'harbourTime', 'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo',
+        // Weather
+        'windDirection', 'seaDirection', 'swellDirection', 'windForce', 'seaState', 'swellHeight',
+        // Bunker Consumptions
+        'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
+        'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
+        // Bunker Supplies
+        'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
+        // Calculated Bunkers
+        'totalConsumptionLsifo', 'totalConsumptionLsmgo', 'totalConsumptionCylOil', 'totalConsumptionMeOil', 'totalConsumptionAeOil',
+        'currentRobLsifo', 'currentRobLsmgo', 'currentRobCylOil', 'currentRobMeOil', 'currentRobAeOil',
+        // Initial ROBs (should generally not be updated after first submission, but included for completeness if needed)
+        'initialRobLsifo', 'initialRobLsmgo', 'initialRobCylOil', 'initialRobMeOil', 'initialRobAeOil',
+        // Machinery ME Params
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp',
+        'meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meThrustBearingTemp', 'meDailyRunHours',
+        'mePresentRpm', 'meCurrentSpeed',
+        // Performance Metrics
+        'sailingTimeVoyage', 'avgSpeedVoyage',
+        // Noon Report Specific
+        'passageState', 'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse',
+        'sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse',
+        'rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse',
+        // Arrival Report Specific
+        'eospDate', 'eospTime', 'eospLatDeg', 'eospLatMin', 'eospLatDir', 'eospLonDeg', 'eospLonMin', 'eospLonDir', 'eospCourse',
+        'estimatedBerthingDate', 'estimatedBerthingTime',
+        // Berth Report Specific
+        'berthDate', 'berthTime', 'berthLatDeg', 'berthLatMin', 'berthLatDir', 'berthLonDeg', 'berthLonMin', 'berthLonDir',
+        'cargoLoaded', 'cargoUnloaded', 'cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime', 'berthNumber',
+        // voyageId can also be updated (e.g., when linking a departure report)
+        'voyageId'
+    ];
+
+    const setClauses: string[] = [];
+    const params: (string | number | null)[] = [];
+
+    for (const key of DYNAMIC_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+            setClauses.push(`${key} = ?`);
+            params.push(updateData[key as keyof typeof updateData] ?? null);
+        }
+    }
+    
+    // Always update 'updatedAt'
+    setClauses.push('updatedAt = ?');
+    params.push(now);
+
+    if (setClauses.length === 1) { // Only updatedAt is being set
+      console.warn(`ReportModel.update called for report ${id} with no data fields to update.`);
+      return true; // Or false, depending on desired behavior for no-op updates
+    }
+
+    params.push(id); // For WHERE id = ?
+
+    const sql = `UPDATE reports SET ${setClauses.join(', ')} WHERE id = ?`;
+    console.log(`[Model.update] Generated SQL: ${sql}`);
+    console.log(`[Model.update] SQL Params:`, JSON.stringify(params, null, 2));
+    
+    try {
+      const stmt = db.prepare(sql);
+      const result = stmt.run(...params);
+      return result.changes > 0;
+    } catch (error) {
+      console.error(`Error updating report ${id}:`, error);
+      console.error("SQL:", sql);
+      console.error("Params:", params);
+      return false;
+    }
   },
 };
 

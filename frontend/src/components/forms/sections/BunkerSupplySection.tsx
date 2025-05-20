@@ -14,12 +14,14 @@ interface BunkerSupplySectionProps {
   formData: BunkerSupplyData;
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   title: string; // e.g., "Supply (Since Last)" or "Bunkers Received"
+  isReadOnly?: boolean; // Add isReadOnly prop
 }
 
 const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
   formData,
   handleChange,
   title,
+  isReadOnly = false, // Default to false
 }) => {
   return (
     <>
@@ -30,7 +32,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.01" id="supplyLsifo" name="supplyLsifo"
             value={formData.supplyLsifo ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -38,7 +40,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.01" id="supplyLsmgo" name="supplyLsmgo"
             value={formData.supplyLsmgo ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -46,7 +48,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyCylOil" name="supplyCylOil"
             value={formData.supplyCylOil ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -54,7 +56,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyMeOil" name="supplyMeOil"
             value={formData.supplyMeOil ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
         <div>
@@ -62,7 +64,7 @@ const BunkerSupplySection: React.FC<BunkerSupplySectionProps> = ({
           <input
             type="number" step="0.1" id="supplyAeOil" name="supplyAeOil"
             value={formData.supplyAeOil ?? ''} onChange={handleChange} required min="0"
-            className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"
+            readOnly={isReadOnly} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           />
         </div>
       </div>

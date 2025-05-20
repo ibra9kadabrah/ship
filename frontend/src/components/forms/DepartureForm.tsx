@@ -1,10 +1,11 @@
 import React, { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import apiClient, { getCarryOverCargoDetails } from '../../services/api'; // Import getCarryOverCargoDetails
+import apiClient, { getCarryOverCargoDetails, getReportById } from '../../services/api'; // Import getCarryOverCargoDetails and getReportById
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
 import { CarryOverCargo } from '../../types/voyage'; // Import CarryOverCargo
-import { DepartureSpecificData, BaseReportFormData, CardinalDirection, CargoStatus, EngineUnitData, AuxEngineData } from '../../types/report';
+import { DepartureSpecificData, BaseReportFormData, CardinalDirection, CargoStatus, EngineUnitData, AuxEngineData, FullReportViewDTO } from '../../types/report'; // Added FullReportViewDTO
+import { departureChecklistItems, ChecklistItem } from '../../config/reportChecklists'; // Import checklist config
 import BunkerConsumptionSection from './sections/BunkerConsumptionSection';
 import BunkerSupplySection from './sections/BunkerSupplySection';
 import MachineryMEParamsSection from './sections/MachineryMEParamsSection';
@@ -60,10 +61,18 @@ const initialAuxEngines: AuxEngineData[] = [
   { engineName: 'V1', load: '', kw: '', foPress: '', lubOilPress: '', waterTemp: '', dailyRunHour: '' }   // Optional
 ];
 
-const DepartureForm: React.FC = () => {
+interface DepartureFormProps {
+  reportIdToModify?: string;
+}
+
+const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify }) => {
   const navigate = useNavigate(); // Initialize useNavigate
   const { user } = useAuth(); // Assuming captain is logged in
   const [vesselInfo, setVesselInfo] = useState<VesselInfo | null>(null);
+  const isModifyMode = !!reportIdToModify;
+  const [initialReportData, setInitialReportData] = useState<FullReportViewDTO | null>(null);
+  const [activeModificationChecklist, setActiveModificationChecklist] = useState<string[]>([]);
+  const [officeChangesComment, setOfficeChangesComment] = useState<string | null>(null);
   const [isLoadingVessel, setIsLoadingVessel] = useState(true);
   const [vesselError, setVesselError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,6 +85,8 @@ const DepartureForm: React.FC = () => {
   const [isCargoTypeReadOnly, setIsCargoTypeReadOnly] = useState(false);
   const [isCargoQuantityReadOnly, setIsCargoQuantityReadOnly] = useState(false);
   const [isCargoStatusReadOnly, setIsCargoStatusReadOnly] = useState(false);
+  const [isLoadingReportToModify, setIsLoadingReportToModify] = useState(false);
+
 
   // Form state - initialize with default/empty values
   const [formData, setFormData] = useState<Partial<DepartureFormData>>({
@@ -208,8 +219,110 @@ const DepartureForm: React.FC = () => {
     }
   }, [user]);
 
-  // Effect to pre-fill cargo details from carryOverCargo
+  // Effect to fetch report details if in modify mode
   useEffect(() => {
+    if (isModifyMode && reportIdToModify) {
+      const fetchReportToModify = async () => {
+        setIsLoadingReportToModify(true);
+        setSubmitError(null); // Clear previous errors
+        try {
+          const report = await getReportById(reportIdToModify);
+          setInitialReportData(report);
+console.log("[Modify Mode] Fetched report for modification. Raw report data:", JSON.stringify(report));
+          console.log("[Modify Mode] Modification checklist from report:", JSON.stringify(report.modification_checklist));
+          console.log("[Modify Mode] Requested changes comment from report:", report.requested_changes_comment);
+          // Pre-fill formData - ensure all fields from FullReportViewDTO are mapped to DepartureFormData
+          // This might need careful mapping if structures differ significantly for some fields
+          // Create a helper for safe string conversion from number | null | undefined
+          const toStringOrEmpty = (val: number | null | undefined): string => val !== null && val !== undefined ? String(val) : '';
+
+          const mappedData: Partial<DepartureFormData> = {
+            // Map all fields from FullReportViewDTO to DepartureFormData, handling nulls and type conversions
+            reportDate: report.reportDate || '',
+            reportTime: report.reportTime || '',
+            timeZone: report.timeZone || '',
+            departurePort: report.departurePort || '',
+            destinationPort: report.destinationPort || '',
+            voyageDistance: toStringOrEmpty(report.voyageDistance),
+            etaDate: report.etaDate || '',
+            etaTime: report.etaTime || '',
+            fwdDraft: toStringOrEmpty(report.fwdDraft),
+            aftDraft: toStringOrEmpty(report.aftDraft),
+            cargoQuantity: toStringOrEmpty(report.cargoQuantity),
+            cargoType: report.cargoType || '',
+            cargoStatus: report.cargoStatus ?? 'Loaded', // Default if null
+            faspDate: report.faspDate || '',
+            faspTime: report.faspTime || '',
+            faspLatDeg: toStringOrEmpty(report.faspLatDeg),
+            faspLatMin: toStringOrEmpty(report.faspLatMin),
+            faspLatDir: report.faspLatDir ?? 'N',
+            faspLonDeg: toStringOrEmpty(report.faspLonDeg),
+            faspLonMin: toStringOrEmpty(report.faspLonMin),
+            faspLonDir: report.faspLonDir ?? 'E',
+            faspCourse: toStringOrEmpty(report.faspCourse),
+            harbourDistance: toStringOrEmpty(report.harbourDistance),
+            harbourTime: report.harbourTime || '',
+            windDirection: report.windDirection ?? 'N', // Default if null, or use undefined if select handles it
+            seaDirection: report.seaDirection ?? 'N',
+            swellDirection: report.swellDirection ?? 'N',
+            windForce: toStringOrEmpty(report.windForce),
+            seaState: toStringOrEmpty(report.seaState),
+            swellHeight: toStringOrEmpty(report.swellHeight),
+            meConsumptionLsifo: toStringOrEmpty(report.meConsumptionLsifo),
+            meConsumptionLsmgo: toStringOrEmpty(report.meConsumptionLsmgo),
+            meConsumptionCylOil: toStringOrEmpty(report.meConsumptionCylOil),
+            meConsumptionMeOil: toStringOrEmpty(report.meConsumptionMeOil),
+            meConsumptionAeOil: toStringOrEmpty(report.meConsumptionAeOil),
+            boilerConsumptionLsifo: toStringOrEmpty(report.boilerConsumptionLsifo),
+            boilerConsumptionLsmgo: toStringOrEmpty(report.boilerConsumptionLsmgo),
+            auxConsumptionLsifo: toStringOrEmpty(report.auxConsumptionLsifo),
+            auxConsumptionLsmgo: toStringOrEmpty(report.auxConsumptionLsmgo),
+            supplyLsifo: toStringOrEmpty(report.supplyLsifo),
+            supplyLsmgo: toStringOrEmpty(report.supplyLsmgo),
+            supplyCylOil: toStringOrEmpty(report.supplyCylOil),
+            supplyMeOil: toStringOrEmpty(report.supplyMeOil),
+            supplyAeOil: toStringOrEmpty(report.supplyAeOil),
+            initialRobLsifo: toStringOrEmpty(report.initialRobLsifo),
+            initialRobLsmgo: toStringOrEmpty(report.initialRobLsmgo),
+            initialRobCylOil: toStringOrEmpty(report.initialRobCylOil),
+            initialRobMeOil: toStringOrEmpty(report.initialRobMeOil),
+            initialRobAeOil: toStringOrEmpty(report.initialRobAeOil),
+            meFoPressure: toStringOrEmpty(report.meFoPressure),
+            meLubOilPressure: toStringOrEmpty(report.meLubOilPressure),
+            meFwInletTemp: toStringOrEmpty(report.meFwInletTemp),
+            meLoInletTemp: toStringOrEmpty(report.meLoInletTemp),
+            meScavengeAirTemp: toStringOrEmpty(report.meScavengeAirTemp),
+            meTcRpm1: toStringOrEmpty(report.meTcRpm1),
+            meTcRpm2: toStringOrEmpty(report.meTcRpm2),
+            meTcExhaustTempIn: toStringOrEmpty(report.meTcExhaustTempIn),
+            meTcExhaustTempOut: toStringOrEmpty(report.meTcExhaustTempOut),
+            meThrustBearingTemp: toStringOrEmpty(report.meThrustBearingTemp),
+            meDailyRunHours: toStringOrEmpty(report.meDailyRunHours),
+            mePresentRpm: toStringOrEmpty(report.mePresentRpm),
+            meCurrentSpeed: toStringOrEmpty(report.meCurrentSpeed),
+            engineUnits: report.engineUnits?.map(u => ({ ...u, exhaustTemp: toStringOrEmpty(u.exhaustTemp), underPistonAir: toStringOrEmpty(u.underPistonAir), pcoOutletTemp: toStringOrEmpty(u.pcoOutletTemp), jcfwOutletTemp: toStringOrEmpty(u.jcfwOutletTemp)  })) || initialEngineUnits,
+            auxEngines: report.auxEngines?.map(a => ({ ...a, load: toStringOrEmpty(a.load), kw: toStringOrEmpty(a.kw), foPress: toStringOrEmpty(a.foPress), lubOilPress: toStringOrEmpty(a.lubOilPress), waterTemp: toStringOrEmpty(a.waterTemp), dailyRunHour: toStringOrEmpty(a.dailyRunHour) })) || initialAuxEngines,
+          };
+          setFormData(mappedData);
+          const checklist = report.modification_checklist || [];
+          setActiveModificationChecklist(checklist);
+          setOfficeChangesComment(report.requested_changes_comment || null);
+          console.log("[Modify Mode] Fetched report. Active Checklist:", checklist); // Enhanced log
+          console.log("[Modify Mode] Office comments:", report.requested_changes_comment); // Enhanced log
+        } catch (err: any) {
+          console.error("Error fetching report to modify:", err);
+          setSubmitError(err.response?.data?.error || "Failed to load report data for modification.");
+        } finally {
+          setIsLoadingReportToModify(false);
+        }
+      };
+      fetchReportToModify();
+    }
+  }, [reportIdToModify, isModifyMode]);
+
+  // Effect to pre-fill cargo details from carryOverCargo (only in new report mode)
+  useEffect(() => {
+    if (isModifyMode) return; // Don't run this effect if in modify mode
     if (carryOverCargo && vesselInfo) {
       console.log("Pre-filling cargo from carryOverCargo:", carryOverCargo);
 
@@ -349,18 +462,22 @@ const DepartureForm: React.FC = () => {
     });
 
     // Validate Engine Units (numeric)
-    formData.engineUnits?.forEach((unit, index) => {
-        Object.entries(unit).forEach(([key, value]) => {
-            if (key !== 'unitNumber' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+    const engineUnitNumericFields = ['exhaustTemp', 'underPistonAir', 'pcoOutletTemp', 'jcfwOutletTemp'];
+    formData.engineUnits?.forEach((unit) => {
+        engineUnitNumericFields.forEach(key => {
+            const value = unit[key as keyof Omit<EngineUnitData, 'unitNumber' | 'id' | 'reportId' | 'createdAt' | 'updatedAt'>];
+            if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
                 errors.push(`Engine Unit #${unit.unitNumber} ${key} must be a valid number.`);
             }
         });
     });
 
     // Validate Aux Engines (numeric)
-    formData.auxEngines?.forEach((aux, index) => {
-        Object.entries(aux).forEach(([key, value]) => {
-            if (key !== 'engineName' && value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
+    const auxEngineNumericFields = ['load', 'kw', 'foPress', 'lubOilPress', 'waterTemp', 'dailyRunHour'];
+    formData.auxEngines?.forEach((aux) => {
+        auxEngineNumericFields.forEach(key => {
+            const value = aux[key as keyof Omit<AuxEngineData, 'engineName' | 'id' | 'reportId' | 'createdAt' | 'updatedAt'>];
+            if (value !== undefined && value !== null && value !== '' && isNaN(Number(value))) {
                 errors.push(`Aux Engine ${aux.engineName} ${key} must be a valid number.`);
             }
         });
@@ -478,13 +595,95 @@ const DepartureForm: React.FC = () => {
 
 
     try {
-      await apiClient.post('/reports', payload); // Submit to the unified report endpoint
-      setSubmitSuccess("Departure report submitted successfully!");
-      // Optionally reset form: setFormData({ ...initial empty state... });
-      // Add navigation after success
-      setTimeout(() => navigate('/captain'), 1500); 
+      if (isModifyMode && reportIdToModify) {
+        // Construct changedData payload
+        let changedData: Partial<DepartureSpecificData> = { reportType: 'departure' }; // Always include reportType
+        let hasChanges = false;
+        (Object.keys(formData) as Array<keyof DepartureFormData>).forEach(key => {
+          // Compare with initialReportData, considering type conversions for numbers
+          const currentValue = formData[key];
+          const initialValue = initialReportData ? (initialReportData as any)[key] : undefined;
+
+          let currentTransformed: any = currentValue;
+          let initialTransformed: any = initialValue;
+
+          // If the field is numeric, convert form string to number for comparison
+          // This needs a robust way to identify numeric fields, perhaps from a predefined list or by checking initialReportData type
+          // For simplicity, we'll assume numeric fields in payload are numbers.
+          // This comparison logic needs to be very careful.
+          // A simpler approach for now: if a field was editable, include its current value.
+          // The backend will handle full object update and recalculations.
+          
+          // For now, let's assume we send all editable fields' current values.
+          // A more precise diff would be better for a production system.
+        });
+
+        // For this phase, we'll send the whole formData for editable sections.
+        // The backend will eventually need to be smart about merging.
+        // Or, the frontend needs to send a precise diff.
+        // For now, let's prepare a payload similar to new submission but for the /modify endpoint.
+        // This is a placeholder for the actual diff logic or sending all editable fields.
+        
+        // Filter formData to include only fields affected by the active checklist
+        const fieldsToSubmit: Partial<DepartureSpecificData> = { reportType: 'departure' };
+        let actualChangesMade = false;
+        departureChecklistItems.forEach(checklistItem => {
+          if (activeModificationChecklist.includes(checklistItem.id)) {
+            checklistItem.fields_affected.forEach(fieldName => {
+              const key = fieldName as keyof DepartureFormData;
+              if (formData[key] !== undefined) { // Check if field exists in formData
+                // Compare with initialReportData to see if it actually changed
+                const formValue = formData[key];
+                const initialValueFromFetched = initialReportData ? (initialReportData as any)[key] : undefined;
+                
+                // Convert form value to number if it's a numeric field for proper comparison/payload
+                let transformedFormValue: any = formValue;
+                if (numericFields.includes(key as any) && typeof formValue === 'string' && formValue !== '') {
+                    transformedFormValue = Number(formValue);
+                } else if (typeof formValue === 'string' && formValue === '' && numericFields.includes(key as any) ) {
+                    transformedFormValue = null; // Treat empty string for number as null
+                }
+
+
+                // This comparison is tricky due to type differences (string in form, number/null in initialData)
+                // A robust diffing mechanism would be needed here.
+                // For now, if a field is in the checklist, we include its current (transformed) value.
+                (fieldsToSubmit as any)[key] = transformedFormValue;
+                // A simple check for actual changes (could be more sophisticated)
+                if (String(transformedFormValue) !== String(initialValueFromFetched)) {
+                    actualChangesMade = true;
+                }
+              }
+            });
+          }
+        });
+        
+        if (!actualChangesMade && Object.keys(fieldsToSubmit).length <=1 ) { // only reportType
+            setSubmitError("No changes were made to the editable fields.");
+            setIsSubmitting(false);
+            return;
+        }
+
+        // Ensure engineUnits and auxEngines are included if they were part of the checklist
+        if (activeModificationChecklist.some(id => departureChecklistItems.find(item => item.id === id)?.fields_affected.includes('engineUnits'))) {
+            fieldsToSubmit.engineUnits = payload.engineUnits; // Use the fully processed engineUnits from payload
+        }
+        if (activeModificationChecklist.some(id => departureChecklistItems.find(item => item.id === id)?.fields_affected.includes('auxEngines'))) {
+            fieldsToSubmit.auxEngines = payload.auxEngines; // Use the fully processed auxEngines from payload
+        }
+
+
+        await apiClient.patch(`/reports/${reportIdToModify}/resubmit`, fieldsToSubmit);
+        setSubmitSuccess("Modified report submitted successfully!");
+        setTimeout(() => navigate('/captain/history'), 1500); // Navigate to history to see updated status
+
+      } else {
+        await apiClient.post('/reports', payload); // Submit to the unified report endpoint
+        setSubmitSuccess("Departure report submitted successfully!");
+        setTimeout(() => navigate('/captain'), 1500);
+      }
     } catch (err: any) {
-      console.error("Error submitting departure report:", err);
+      console.error(`Error submitting ${isModifyMode ? 'modified ' : ''}departure report:`, err);
       setSubmitError(err.response?.data?.error || "Failed to submit report.");
     } finally {
       setIsSubmitting(false);
@@ -494,24 +693,87 @@ const DepartureForm: React.FC = () => {
   // Determine if Initial ROB fields should be shown/editable
   const showInitialRob = vesselInfo && vesselInfo.initialRobLsifo === null;
 
+  // Helper function to determine if a field should be editable in modify mode
+  const isFieldEditable = (fieldName: string): boolean => {
+    if (!isModifyMode) {
+      return true;
+    }
+    if (activeModificationChecklist.length === 0) {
+      // Log specifically for fields of interest if checklist is empty
+      if (['cargoQuantity', 'fwdDraft', 'aftDraft'].includes(fieldName)) {
+        console.log(`isFieldEditable for ${fieldName}: ModifyMode=true, ActiveChecklist EMPTY, Result: false`);
+      }
+      return false;
+    }
+    const editable = departureChecklistItems.some(item =>
+      activeModificationChecklist.includes(item.id) && item.fields_affected.includes(fieldName)
+    );
+    // Log for fields of interest
+    if (['cargoQuantity', 'fwdDraft', 'aftDraft', 'departurePort', 'destinationPort', 'harbourDistance', 'harbourTime', 'initialRobLsifo'].includes(fieldName)) {
+      console.log(`isFieldEditable for ${fieldName}: ModifyMode=true, ActiveChecklist: ${JSON.stringify(activeModificationChecklist)}, Result: ${editable}`);
+    } else {
+      // Optional: log for other fields if needed, but can be noisy
+      // console.log(`isFieldEditable for ${fieldName} (other): Result: ${editable}`);
+    }
+    return editable;
+  };
+  
+  // Specific check for grouped sections like engineUnits or auxEngines
+  // This function determines if ANY field within a section is editable,
+  // which then passes isReadOnly={!isSectionEditable(...)} to the section component.
+  // The section component itself will then use its own logic (if any) or apply readOnly to all its inputs.
+  const isSectionEditable = (sectionChecklistPrefix: string): boolean => {
+    if (!isModifyMode) return true;
+    if (activeModificationChecklist.length === 0) return false;
+    // Check if any checklist item relevant to this section is active
+    const editable = departureChecklistItems.some(item =>
+      activeModificationChecklist.includes(item.id) && item.id.startsWith(sectionChecklistPrefix)
+    );
+    console.log(`Section (prefix): ${sectionChecklistPrefix}, ActiveChecklist: ${JSON.stringify(activeModificationChecklist)}, IsSectionEditable: ${editable}`);
+    return editable;
+  };
+
   // Render loading/error states or the form
-  if (isLoadingVessel) return <div className="p-4 text-center">Loading vessel data...</div>;
-  if (vesselError) return <div className="p-4 bg-red-100 text-red-700 rounded">{vesselError}</div>;
-  if (!vesselInfo) return <div className="p-4 text-center">Could not load vessel data.</div>;
+  if (isLoadingVessel || (isModifyMode && isLoadingReportToModify)) return <div className="p-4 text-center">Loading data...</div>;
+  
+  // Error display logic
+  if (!isModifyMode && vesselError) return <div className="p-4 bg-red-100 text-red-700 rounded">{vesselError}</div>;
+  if (isModifyMode && !initialReportData && submitError) return <div className="p-4 bg-red-100 text-red-700 rounded">{submitError}</div>; // Error fetching report to modify
+  if (isModifyMode && !initialReportData && !isLoadingReportToModify) return <div className="p-4 text-center">Could not load report to modify.</div>; // Generic load fail for modify
+  if (!isModifyMode && !vesselInfo && !isLoadingVessel) return <div className="p-4 text-center">Could not load assigned vessel data.</div>; // Generic load fail for new
 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 p-4 bg-white rounded shadow-md">
-      <h2 className="text-2xl font-semibold mb-4 border-b pb-2">New Departure Report</h2>
+      <h2 className="text-2xl font-semibold mb-4 border-b pb-2">
+        {isModifyMode && initialReportData ? `Modify Departure Report (ID: ${initialReportData.id.substring(0,8)}...)` : 'New Departure Report'}
+      </h2>
+
+      {isModifyMode && officeChangesComment && (
+        <div className="mb-6 p-4 border rounded bg-yellow-50 border-yellow-300">
+          <h3 className="text-lg font-medium text-yellow-700 mb-1">Office Comments for Modification:</h3>
+          <p className="text-sm text-yellow-800 whitespace-pre-wrap">{officeChangesComment}</p>
+        </div>
+      )}
 
       {/* Vessel Info Display */}
-      <div className="mb-6 p-4 border rounded bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-700 mb-2">Vessel & Captain Information</h3>
-          <p><strong>Vessel Name:</strong> {vesselInfo.name}</p>
-          <p><strong>IMO Number:</strong> {vesselInfo.imoNumber}</p>
-          <p><strong>Deadweight (DWT):</strong> {vesselInfo.deadweight}</p>
-          <p><strong>Captain:</strong> {user?.name || 'N/A'}</p> {/* Display logged-in captain's name */}
-      </div>
+      {(vesselInfo || initialReportData) && (
+        <div className="mb-6 p-4 border rounded bg-gray-50">
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Vessel & Captain Information</h3>
+            <p><strong>Vessel Name:</strong> {isModifyMode && initialReportData ? initialReportData.vesselName : vesselInfo?.name}</p>
+            {/* IMO and DWT are not in FullReportViewDTO, so only show if new report mode and vesselInfo is loaded */}
+            {!isModifyMode && vesselInfo && (
+              <>
+                <p><strong>IMO Number:</strong> {vesselInfo.imoNumber}</p>
+                <p><strong>Deadweight (DWT):</strong> {vesselInfo.deadweight}</p>
+              </>
+            )}
+             {isModifyMode && initialReportData && ( // Show vessel ID if in modify mode as a fallback
+                <p><strong>Vessel ID:</strong> {initialReportData.vesselId}</p>
+            )}
+            <p><strong>Captain:</strong> {isModifyMode && initialReportData ? initialReportData.captainName : user?.name || 'N/A'}</p>
+        </div>
+      )}
 
       {submitError && <div className="p-3 bg-red-100 text-red-700 rounded">{submitError}</div>}
       {submitSuccess && <div className="p-3 bg-green-100 text-green-700 rounded">{submitSuccess}</div>}
@@ -580,15 +842,15 @@ const DepartureForm: React.FC = () => {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div>
                 <label htmlFor="fwdDraft" className="block text-sm font-medium text-gray-700">Fwd Draft (m)</label>
-                <input type="number" step="0.01" id="fwdDraft" name="fwdDraft" value={formData.fwdDraft} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                <input type="number" step="0.01" id="fwdDraft" name="fwdDraft" value={formData.fwdDraft} onChange={handleChange} required min="0" readOnly={isModifyMode && !isFieldEditable('fwdDraft')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('fwdDraft') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
             </div>
              <div>
                 <label htmlFor="aftDraft" className="block text-sm font-medium text-gray-700">Aft Draft (m)</label>
-                <input type="number" step="0.01" id="aftDraft" name="aftDraft" value={formData.aftDraft} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                <input type="number" step="0.01" id="aftDraft" name="aftDraft" value={formData.aftDraft} onChange={handleChange} required min="0" readOnly={isModifyMode && !isFieldEditable('aftDraft')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('aftDraft') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
             </div>
              <div>
                 <label htmlFor="cargoQuantity" className="block text-sm font-medium text-gray-700">
-                  Cargo Quantity (MT) {isCargoQuantityReadOnly ? '(from carry-over)' : ''}
+                  Cargo Quantity (MT) {(isModifyMode ? '' : (isCargoQuantityReadOnly ? '(from carry-over)' : ''))}
                 </label>
                 <input
                   type="number"
@@ -598,13 +860,13 @@ const DepartureForm: React.FC = () => {
                   onChange={handleChange}
                   required
                   min="0"
-                  readOnly={isCargoQuantityReadOnly}
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isCargoQuantityReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={isModifyMode ? !isFieldEditable('cargoQuantity') : isCargoQuantityReadOnly}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${(isModifyMode ? !isFieldEditable('cargoQuantity') : isCargoQuantityReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
             </div>
              <div>
                 <label htmlFor="cargoType" className="block text-sm font-medium text-gray-700">
-                  Cargo Type {isCargoTypeReadOnly ? '(from carry-over)' : ''}
+                  Cargo Type {(isModifyMode ? '' : (isCargoTypeReadOnly ? '(from carry-over)' : ''))}
                 </label>
                 <input
                   type="text"
@@ -613,13 +875,13 @@ const DepartureForm: React.FC = () => {
                   value={formData.cargoType}
                   onChange={handleChange}
                   required
-                  readOnly={isCargoTypeReadOnly}
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isCargoTypeReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  readOnly={isModifyMode ? !isFieldEditable('cargoType') : isCargoTypeReadOnly}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${(isModifyMode ? !isFieldEditable('cargoType') : isCargoTypeReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
             </div>
              <div>
                 <label htmlFor="cargoStatus" className="block text-sm font-medium text-gray-700">
-                  Cargo Status {isCargoStatusReadOnly ? '(from carry-over)' : ''}
+                  Cargo Status {(isModifyMode ? '' : (isCargoStatusReadOnly ? '(from carry-over)' : ''))}
                 </label>
                 <select
                   id="cargoStatus"
@@ -627,8 +889,8 @@ const DepartureForm: React.FC = () => {
                   value={formData.cargoStatus}
                   onChange={handleChange}
                   required
-                  disabled={isCargoStatusReadOnly} // Use disabled for select for better UX with read-only
-                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isCargoStatusReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  disabled={isModifyMode ? !isFieldEditable('cargoStatus') : isCargoStatusReadOnly}
+                  className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${(isModifyMode ? !isFieldEditable('cargoStatus') : isCargoStatusReadOnly) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                     <option value="Loaded">Loaded</option>
                     <option value="Empty">Empty</option>
@@ -643,11 +905,11 @@ const DepartureForm: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="faspDate" className="block text-sm font-medium text-gray-700">FASP Date</label>
-            <input type="date" id="faspDate" name="faspDate" value={formData.faspDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="date" id="faspDate" name="faspDate" value={formData.faspDate || ''} onChange={handleChange} required readOnly={isModifyMode && !activeModificationChecklist.includes('departure_fasp_datetime')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_fasp_datetime') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
           <div>
             <label htmlFor="faspTime" className="block text-sm font-medium text-gray-700">FASP Time</label>
-            <input type="time" id="faspTime" name="faspTime" value={formData.faspTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="time" id="faspTime" name="faspTime" value={formData.faspTime || ''} onChange={handleChange} required readOnly={isModifyMode && !activeModificationChecklist.includes('departure_fasp_datetime')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_fasp_datetime') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
           {/* Replace FASP Lat/Lon inputs with CoordinateInputGroup */}
           <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -662,7 +924,7 @@ const DepartureForm: React.FC = () => {
               onDirectionChange={(e) => handleCoordinateChange('faspLat', 'Dir', e.target.value)}
               directionOptions={['N', 'S']}
               required={true}
-              // Add error props if implementing detailed validation later
+              readOnly={isModifyMode && !activeModificationChecklist.includes('departure_fasp_coords')}
             />
             <CoordinateInputGroup
               label="FASP Longitude"
@@ -675,12 +937,12 @@ const DepartureForm: React.FC = () => {
               onDirectionChange={(e) => handleCoordinateChange('faspLon', 'Dir', e.target.value)}
               directionOptions={['E', 'W']}
               required={true}
-              // Add error props if implementing detailed validation later
+              readOnly={isModifyMode && !activeModificationChecklist.includes('departure_fasp_coords')}
             />
           </div>
            <div>
             <label htmlFor="faspCourse" className="block text-sm font-medium text-gray-700">FASP Course (°)</label>
-            <input type="number" id="faspCourse" name="faspCourse" value={formData.faspCourse} onChange={handleChange} required min="0" max="360" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="number" id="faspCourse" name="faspCourse" value={formData.faspCourse || ''} onChange={handleChange} required min="0" max="360" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_fasp_course')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_fasp_course') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
         </div>
       </fieldset>
@@ -691,11 +953,11 @@ const DepartureForm: React.FC = () => {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div>
              <label htmlFor="harbourDistance" className="block text-sm font-medium text-gray-700">Harbour Distance (NM)</label>
-             <input type="number" step="0.1" id="harbourDistance" name="harbourDistance" value={formData.harbourDistance} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+             <input type="number" step="0.1" id="harbourDistance" name="harbourDistance" value={formData.harbourDistance || ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_harbour_distance_time')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_harbour_distance_time') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
            </div>
            <div>
              <label htmlFor="harbourTime" className="block text-sm font-medium text-gray-700">Harbour Time (HH:MM)</label>
-             <input type="text" pattern="[0-9]{2}:[0-9]{2}" id="harbourTime" name="harbourTime" value={formData.harbourTime} onChange={handleChange} required placeholder="HH:MM" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+             <input type="text" pattern="[0-9]{2}:[0-9]{2}" id="harbourTime" name="harbourTime" value={formData.harbourTime || ''} onChange={handleChange} required placeholder="HH:MM" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_harbour_distance_time')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_harbour_distance_time') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
            </div>
            {/* Removed Distance Since Last Report Input */}
          </div>
@@ -707,33 +969,33 @@ const DepartureForm: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="windDirection" className="block text-sm font-medium text-gray-700">Wind Direction</label>
-            <select id="windDirection" name="windDirection" value={formData.windDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">
+            <select id="windDirection" name="windDirection" value={formData.windDirection || 'N'} onChange={handleChange} required disabled={isModifyMode && !activeModificationChecklist.includes('departure_weather_wind')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !activeModificationChecklist.includes('departure_weather_wind') ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
               {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
             </select>
           </div>
            <div>
             <label htmlFor="windForce" className="block text-sm font-medium text-gray-700">Wind Force (Beaufort)</label>
-            <input type="number" id="windForce" name="windForce" value={formData.windForce} onChange={handleChange} required min="0" max="12" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="number" id="windForce" name="windForce" value={formData.windForce || ''} onChange={handleChange} required min="0" max="12" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_weather_wind')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_weather_wind') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
            <div>
             <label htmlFor="seaDirection" className="block text-sm font-medium text-gray-700">Sea Direction</label>
-             <select id="seaDirection" name="seaDirection" value={formData.seaDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">
+             <select id="seaDirection" name="seaDirection" value={formData.seaDirection || 'N'} onChange={handleChange} required disabled={isModifyMode && !activeModificationChecklist.includes('departure_weather_sea')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !activeModificationChecklist.includes('departure_weather_sea') ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
              </select>
           </div>
            <div>
             <label htmlFor="seaState" className="block text-sm font-medium text-gray-700">Sea State (Douglas Scale)</label>
-            <input type="number" id="seaState" name="seaState" value={formData.seaState} onChange={handleChange} required min="0" max="9" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="number" id="seaState" name="seaState" value={formData.seaState || ''} onChange={handleChange} required min="0" max="9" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_weather_sea')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_weather_sea') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
            <div>
             <label htmlFor="swellDirection" className="block text-sm font-medium text-gray-700">Swell Direction</label>
-             <select id="swellDirection" name="swellDirection" value={formData.swellDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">
+             <select id="swellDirection" name="swellDirection" value={formData.swellDirection || 'N'} onChange={handleChange} required disabled={isModifyMode && !activeModificationChecklist.includes('departure_weather_swell')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !activeModificationChecklist.includes('departure_weather_swell') ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}
              </select>
           </div>
            <div>
             <label htmlFor="swellHeight" className="block text-sm font-medium text-gray-700">Swell Height (m)</label>
-            <input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+            <input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight || ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_weather_swell')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_weather_swell') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
           </div>
         </div>
       </fieldset>
@@ -744,13 +1006,14 @@ const DepartureForm: React.FC = () => {
             <BunkerConsumptionSection
               formData={formData}
               handleChange={handleChange}
-              // title prop removed
+              isReadOnly={isModifyMode && !['departure_bunker_me_cons', 'departure_bunker_boiler_cons', 'departure_bunker_aux_cons'].some(id => activeModificationChecklist.includes(id))}
             />
             <BunkerSupplySection
-          formData={formData}
-          handleChange={handleChange}
-          title="Supply (Since Last)"
-        />
+              formData={formData}
+              handleChange={handleChange}
+              title="Supply (Since Last)"
+              isReadOnly={isModifyMode && !activeModificationChecklist.includes('departure_bunker_supplies')}
+            />
       </fieldset>
 
       {/* --- Initial ROB Section (Conditional) --- */}
@@ -761,24 +1024,24 @@ const DepartureForm: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                  <div>
                     <label htmlFor="initialRobLsifo" className="block text-sm font-medium text-gray-700">Initial LSIFO (MT)</label>
-                    <input type="number" step="0.01" id="initialRobLsifo" name="initialRobLsifo" value={formData.initialRobLsifo ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                    <input type="number" step="0.01" id="initialRobLsifo" name="initialRobLsifo" value={formData.initialRobLsifo ?? ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_initial_robs')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_initial_robs') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </div>
                  {/* Add inputs for LSMGO, CylOil, MeOil, AeOil */}
                  <div>
                     <label htmlFor="initialRobLsmgo" className="block text-sm font-medium text-gray-700">Initial LSMGO (MT)</label>
-                    <input type="number" step="0.01" id="initialRobLsmgo" name="initialRobLsmgo" value={formData.initialRobLsmgo ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                    <input type="number" step="0.01" id="initialRobLsmgo" name="initialRobLsmgo" value={formData.initialRobLsmgo ?? ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_initial_robs')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_initial_robs') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </div>
                  <div>
                     <label htmlFor="initialRobCylOil" className="block text-sm font-medium text-gray-700">Initial Cyl Oil (L)</label>
-                    <input type="number" step="0.01" id="initialRobCylOil" name="initialRobCylOil" value={formData.initialRobCylOil ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                    <input type="number" step="0.01" id="initialRobCylOil" name="initialRobCylOil" value={formData.initialRobCylOil ?? ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_initial_robs')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_initial_robs') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </div>
                  <div>
                     <label htmlFor="initialRobMeOil" className="block text-sm font-medium text-gray-700">Initial ME Oil (L)</label>
-                    <input type="number" step="0.01" id="initialRobMeOil" name="initialRobMeOil" value={formData.initialRobMeOil ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                    <input type="number" step="0.01" id="initialRobMeOil" name="initialRobMeOil" value={formData.initialRobMeOil ?? ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_initial_robs')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_initial_robs') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </div>
                  <div>
                     <label htmlFor="initialRobAeOil" className="block text-sm font-medium text-gray-700">Initial AE Oil (L)</label>
-                    <input type="number" step="0.01" id="initialRobAeOil" name="initialRobAeOil" value={formData.initialRobAeOil ?? ''} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                    <input type="number" step="0.01" id="initialRobAeOil" name="initialRobAeOil" value={formData.initialRobAeOil ?? ''} onChange={handleChange} required min="0" readOnly={isModifyMode && !activeModificationChecklist.includes('departure_initial_robs')} className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !activeModificationChecklist.includes('departure_initial_robs') ? 'bg-gray-100 cursor-not-allowed' : ''}`}/>
                 </div>
             </div>
         </fieldset>
@@ -791,14 +1054,17 @@ const DepartureForm: React.FC = () => {
           handleChange={handleChange}
           isTcRpm2Optional={true} // TC#2 is optional in Departure form
           includeDailyRunHours={true} // Departure form includes daily run hours
+          isReadOnly={isModifyMode && !activeModificationChecklist.includes('departure_machinery_me_press_temp') && !activeModificationChecklist.includes('departure_machinery_me_tc') && !activeModificationChecklist.includes('departure_machinery_me_run_perf')}
         />
         <EngineUnitsSection
           engineUnits={formData.engineUnits || []}
           handleEngineUnitChange={handleEngineUnitChange}
+          isReadOnly={isModifyMode && !activeModificationChecklist.includes('departure_machinery_engine_units')}
         />
         <AuxEnginesSection
           auxEngines={formData.auxEngines || []}
           handleAuxEngineChange={handleAuxEngineChange}
+          isReadOnly={isModifyMode && !activeModificationChecklist.includes('departure_machinery_aux_engines')}
         />
       </fieldset>
 
@@ -807,12 +1073,12 @@ const DepartureForm: React.FC = () => {
       <div className="pt-4">
         <button
           type="submit"
-          disabled={isSubmitting || isLoadingVessel}
+          disabled={isSubmitting || isLoadingVessel || (isModifyMode && isLoadingReportToModify)}
           className={`w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out ${
-            (isSubmitting || isLoadingVessel) ? 'opacity-70 cursor-not-allowed' : ''
+            (isSubmitting || isLoadingVessel || (isModifyMode && isLoadingReportToModify)) ? 'opacity-70 cursor-not-allowed' : ''
           }`}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Departure Report'}
+          {isSubmitting ? 'Submitting...' : (isModifyMode ? 'Submit Modified Report' : 'Submit Departure Report')}
         </button>
       </div>
     </form>

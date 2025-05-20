@@ -84,6 +84,11 @@ type ReportRecordData = {
     // Calculated Performance Metrics
     sailingTimeVoyage?: number | null;
     avgSpeedVoyage?: number | null;
+    // Fields for review/modification flow
+    modification_checklist?: string | null; // JSON string of checklist items
+    requested_changes_comment?: string | null;
+    createdAt: string; // Add createdAt
+    updatedAt: string;
 };
 
 // Local interface for ROB data used in reviewReport
@@ -489,10 +494,12 @@ export const ReportService = {
              // Add calculated performance metrics
              sailingTimeVoyage: calculatedSailingTimeVoyage,
              avgSpeedVoyage: calculatedAvgSpeedVoyage,
-             ...initialRobFieldsForRecord 
-        };
-
-        // --- 7. Execute Transaction ---
+             ...initialRobFieldsForRecord,
+             createdAt: new Date().toISOString(), // Add createdAt
+             updatedAt: new Date().toISOString()  // Add updatedAt
+         };
+ 
+         // --- 7. Execute Transaction ---
         const transaction = db.transaction(() => {
             let finalVoyageId: string;
 
@@ -563,6 +570,18 @@ export const ReportService = {
         ]);
 
         // 4. Construct the full DTO
+        // Ensure reportBase has the new fields, even if they are null/undefined from the DB
+        const modificationChecklistString = (reportBase as any).modification_checklist;
+        let parsedChecklist: string[] | null = null;
+        if (modificationChecklistString && typeof modificationChecklistString === 'string') {
+            try {
+                parsedChecklist = JSON.parse(modificationChecklistString);
+            } catch (e) {
+                console.error("Failed to parse modification_checklist JSON:", e);
+                // Keep as null if parsing fails
+            }
+        }
+
         const fullReport: FullReportViewDTO = {
             ...(reportBase as Report), // Cast needed as findById returns Partial<Report>
             engineUnits: engineUnits || [], // Ensure arrays exist
@@ -570,8 +589,8 @@ export const ReportService = {
             vesselName: vessel?.name ?? 'Unknown Vessel',
             captainName: captain?.name ?? 'Unknown Captain',
             // Safely access cargo details, prioritizing the fetched departure report (if available)
-            voyageCargoQuantity: (departureReport?.reportType === 'departure' ? departureReport.cargoQuantity : null) 
-                                ?? (reportBase.reportType === 'departure' ? reportBase.cargoQuantity : null) 
+            voyageCargoQuantity: (departureReport?.reportType === 'departure' ? departureReport.cargoQuantity : null)
+                                ?? (reportBase.reportType === 'departure' ? reportBase.cargoQuantity : null)
                                 ?? null,
             voyageCargoType: (departureReport?.reportType === 'departure' ? departureReport.cargoType : null)
                              ?? (reportBase.reportType === 'departure' ? reportBase.cargoType : null)
@@ -579,10 +598,13 @@ export const ReportService = {
             voyageCargoStatus: (departureReport?.reportType === 'departure' ? departureReport.cargoStatus : null)
                                ?? (reportBase.reportType === 'departure' ? reportBase.cargoStatus : null)
                                ?? null,
+            // Add the new fields
+            modification_checklist: parsedChecklist,
+            requested_changes_comment: (reportBase as any).requested_changes_comment || null,
         };
 
         // We need to cast the final object because TS struggles with the complex conditional assignment above
-        return fullReport as FullReportViewDTO; 
+        return fullReport as FullReportViewDTO;
     },
 
     // Define InitialRobData interface locally if not imported
@@ -768,5 +790,71 @@ export const ReportService = {
     // Let's add the wrapper for now to maintain the existing controller interface.
     async exportMRVExcel(voyageId: string): Promise<Buffer> {
         return ExcelExportService.exportMRVExcel(voyageId);
+    },
+
+    async resubmitReport(reportId: string, captainId: string, changes: Partial<CreateReportDTO>): Promise<FullReportViewDTO> {
+        console.log(`[Service.resubmitReport] Called for reportId: ${reportId} by captainId: ${captainId}`);
+        console.log(`[Service.resubmitReport] Incoming 'changes' payload:`, JSON.stringify(changes, null, 2));
+
+        const transaction = db.transaction(() => {
+            const report = ReportModel.findById(reportId);
+            if (!report) {
+                throw new Error(`Report with ID ${reportId} not found.`);
+            }
+            if (report.captainId !== captainId) {
+                throw new Error(`Captain ${captainId} is not authorized to resubmit report ${reportId}.`);
+            }
+            if (report.status !== 'changes_requested') {
+                throw new Error(`Report ${reportId} is not in 'changes_requested' status. Current status: ${report.status}.`);
+            }
+
+            // Prepare data for update. Only update fields present in `changes`.
+            // We need to be careful about how engineUnits and auxEngines are handled.
+            // If they are in `changes`, it implies the entire array for that section should be replaced.
+            const { engineUnits, auxEngines, ...restOfChanges } = changes;
+            const updateData: Partial<ReportRecordData> = { ...restOfChanges };
+
+            // Reset review fields and status
+            updateData.status = 'pending';
+            updateData.reviewerId = null;
+            updateData.reviewDate = null;
+            updateData.reviewComments = null;
+            updateData.modification_checklist = null; // Clear the checklist
+            updateData.requested_changes_comment = null; // Clear office comment
+            updateData.updatedAt = new Date().toISOString();
+            
+            console.log(`[Service.resubmitReport] 'updateData' being passed to ReportModel.update:`, JSON.stringify(updateData, null, 2));
+
+            // Handle engineUnits and auxEngines: Delete existing and create new if provided in changes
+            if (engineUnits) { // Use the destructured variable
+                ReportEngineUnitModel.deleteByReportId(reportId);
+                ReportEngineUnitModel.createMany(reportId, engineUnits);
+            }
+            if (auxEngines) { // Use the destructured variable
+                ReportAuxEngineModel.deleteByReportId(reportId);
+                ReportAuxEngineModel.createMany(reportId, auxEngines);
+            }
+            
+            // TODO: Recalculate bunker ROBs and distances if relevant fields were changed.
+            // This part is complex and depends on which fields were modified.
+            // For now, we'll assume the frontend sends calculated values if they change,
+            // or we might need a more sophisticated update logic that re-triggers calculations.
+            // For simplicity in this step, we'll directly update what's provided in `changes`,
+            // plus the status and review fields.
+
+            const success = ReportModel.update(reportId, updateData);
+            if (!success) {
+                throw new Error(`Failed to update report ${reportId} during resubmission.`);
+            }
+            return reportId;
+        });
+
+        try {
+            const updatedReportId = transaction();
+            return this.getReportById(updatedReportId); // Fetch and return the full, updated report
+        } catch (error) {
+            console.error(`Report resubmission transaction failed for report ${reportId}:`, error);
+            throw error;
+        }
     }
 };

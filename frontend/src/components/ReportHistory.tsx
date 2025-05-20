@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom'; // Import Link and useNavigate
 import apiClient from '../services/api';
-import { ReportHistoryItem } from '../types/report'; // Import from frontend types
+import { ReportHistoryItem, ReportStatus } from '../types/report'; // Import ReportStatus
 
 // Removed inline definition, using imported type now
 /* interface ReportHistoryItem {
@@ -19,6 +20,7 @@ const ReportHistory: React.FC = () => {
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate(); // Initialize useNavigate
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -39,12 +41,23 @@ const ReportHistory: React.FC = () => {
     fetchHistory();
   }, []); // Empty dependency array means this runs once on mount
 
-  const getStatusColor = (status: ReportHistoryItem['status']) => {
+  const getStatusColor = (status: ReportStatus) => { // Use imported ReportStatus
     switch (status) {
       case 'approved': return 'text-green-600 bg-green-100';
       case 'rejected': return 'text-red-600 bg-red-100';
       case 'pending': return 'text-yellow-600 bg-yellow-100';
+      case 'changes_requested': return 'text-orange-600 bg-orange-100'; // New status
       default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getStatusDisplayName = (status: ReportStatus): string => {
+    switch (status) {
+      case 'pending': return 'Pending Review';
+      case 'approved': return 'Approved';
+      case 'rejected': return 'Rejected';
+      case 'changes_requested': return 'Changes Requested';
+      default: return status;
     }
   };
 
@@ -70,7 +83,7 @@ const ReportHistory: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                {/* Add more columns if needed, e.g., Voyage Info */}
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -87,10 +100,20 @@ const ReportHistory: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(report.status)}`}>
-                      {report.status}
+                      {getStatusDisplayName(report.status)}
                     </span>
                   </td>
-                  {/* Add more cells if needed */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {report.status === 'changes_requested' && report.reportType === 'departure' && (
+                      <Link
+                        to={`/captain/modify-report/${report.id}`}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        Modify Report
+                      </Link>
+                    )}
+                    {/* Placeholder for other actions like 'View Details' if needed */}
+                  </td>
                 </tr>
               ))}
             </tbody>

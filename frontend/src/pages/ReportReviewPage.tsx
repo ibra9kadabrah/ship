@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getReportById, reviewReport } from '../services/api'; // Import specific functions
 // Import the full report view type
-import { FullReportViewDTO } from '../types/report'; 
+import { FullReportViewDTO, ReportStatus } from '../types/report'; // Import ReportStatus
+import { ChecklistItem, getChecklistForReportType, departureChecklistItems } from '../config/reportChecklists'; // Corrected import path
 
 // Placeholder type removed
 
@@ -14,7 +15,10 @@ const ReportReviewPage: React.FC = () => {
   const [reportDetails, setReportDetails] = useState<FullReportViewDTO | null>(null); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reviewComments, setReviewComments] = useState('');
+  const [reviewComments, setReviewComments] = useState(''); // For general approve/reject
+  const [requestedChangesComment, setRequestedChangesComment] = useState(''); // For 'changes_requested'
+  const [selectedChecklistItems, setSelectedChecklistItems] = useState<string[]>([]);
+  const [currentChecklist, setCurrentChecklist] = useState<ChecklistItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -31,7 +35,13 @@ const ReportReviewPage: React.FC = () => {
       try {
         // Call the actual API function
         const fetchedReport = await getReportById(reportId);
-        setReportDetails(fetchedReport); 
+        setReportDetails(fetchedReport);
+        if (fetchedReport.reportType === 'departure') {
+          setCurrentChecklist(departureChecklistItems); // Initially load departure checklist
+        } else {
+          // Later, use getChecklistForReportType(fetchedReport.reportType) when other types are supported
+          setCurrentChecklist([]);
+        }
       } catch (err: any) {
         console.error(`Error fetching report ${reportId}:`, err);
         setError(err.response?.data?.message || `Failed to load report details for ID: ${reportId}.`);
@@ -44,18 +54,33 @@ const ReportReviewPage: React.FC = () => {
     fetchReportDetails();
   }, [reportId]); // Refetch if reportId changes
 
-  const handleReviewSubmit = async (status: 'approved' | 'rejected') => {
+  const handleChecklistItemChange = (itemId: string) => {
+    setSelectedChecklistItems(prev =>
+      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
+    );
+  };
+
+  const handleReviewSubmit = async (status: ReportStatus) => {
      if (!reportId) return;
      setIsSubmitting(true);
      setSubmitError(null);
+
+     const payload: any = { status }; // Use 'any' for payload to dynamically add properties
+
+     if (status === 'approved' || status === 'rejected') {
+        payload.reviewComments = reviewComments;
+     } else if (status === 'changes_requested') {
+        payload.modification_checklist = selectedChecklistItems;
+        payload.requested_changes_comment = requestedChangesComment;
+        // Optionally, clear general reviewComments if it's not relevant for 'changes_requested'
+        // payload.reviewComments = '';
+     }
+
      try {
-        // Call the actual API function
-        await reviewReport(reportId, { status, reviewComments });
-        
-        // On success, navigate back to the dashboard
+        await reviewReport(reportId, payload);
         navigate('/office'); // Navigate to pending reports list
      } catch (err: any) {
-         console.error(`Error submitting review for report ${reportId}:`, err);
+         console.error(`Error submitting review for report ${reportId} with status ${status}:`, err);
          setSubmitError(err.response?.data?.message || `Failed to ${status} report.`);
      } finally {
          setIsSubmitting(false);
@@ -81,7 +106,19 @@ const ReportReviewPage: React.FC = () => {
             <div><strong>Report Time:</strong> {reportDetails.reportTime} ({reportDetails.timeZone})</div>
             <div><strong>Vessel:</strong> {reportDetails.vesselName}</div>
             <div><strong>Captain:</strong> {reportDetails.captainName}</div>
-            <div><strong>Status:</strong> <span className={`px-2 py-0.5 rounded text-xs font-medium ${reportDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : reportDetails.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{reportDetails.status}</span></div>
+            <div><strong>Status:</strong> <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+              reportDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              reportDetails.status === 'approved' ? 'bg-green-100 text-green-800' :
+              reportDetails.status === 'rejected' ? 'bg-red-100 text-red-800' :
+              reportDetails.status === 'changes_requested' ? 'bg-orange-100 text-orange-800' : // Added styling for changes_requested
+              'bg-gray-100 text-gray-800' // Default fallback
+            }`}>{
+              reportDetails.status === 'pending' ? 'Pending Review' :
+              reportDetails.status === 'approved' ? 'Approved' :
+              reportDetails.status === 'rejected' ? 'Rejected' :
+              reportDetails.status === 'changes_requested' ? 'Changes Requested' :
+              reportDetails.status // Fallback to raw status if not one of the above
+            }</span></div>
             {reportDetails.voyageId && <div><strong>Voyage ID:</strong> <span className="font-mono text-xs">{reportDetails.voyageId}</span></div>}
           </div>
         </section>
@@ -226,7 +263,27 @@ const ReportReviewPage: React.FC = () => {
              {reportDetails.supplyMeOil !== null && <div><strong>ME Oil:</strong> {reportDetails.supplyMeOil > 0 ? <span className="text-blue-600">{reportDetails.supplyMeOil?.toFixed(1)} L</span> : '0.0 L'}</div>}
              {reportDetails.supplyAeOil !== null && <div><strong>AE Oil:</strong> {reportDetails.supplyAeOil > 0 ? <span className="text-blue-600">{reportDetails.supplyAeOil?.toFixed(1)} L</span> : '0.0 L'}</div>}
            </div>
-        </section>
+         </section>
+
+       {/* --- Initial ROBs (If Departure Report and data exists) --- */}
+       {reportDetails.reportType === 'departure' && (
+         reportDetails.initialRobLsifo !== null ||
+         reportDetails.initialRobLsmgo !== null ||
+         reportDetails.initialRobCylOil !== null ||
+         reportDetails.initialRobMeOil !== null ||
+         reportDetails.initialRobAeOil !== null
+       ) && (
+         <section>
+           <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Initial Remaining On Board (at Voyage Start)</h3>
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-2 text-sm">
+             {reportDetails.initialRobLsifo !== null && <div><strong>LSIFO:</strong> {reportDetails.initialRobLsifo?.toFixed(2)} MT</div>}
+             {reportDetails.initialRobLsmgo !== null && <div><strong>LSMGO:</strong> {reportDetails.initialRobLsmgo?.toFixed(2)} MT</div>}
+             {reportDetails.initialRobCylOil !== null && <div><strong>Cyl Oil:</strong> {reportDetails.initialRobCylOil?.toFixed(1)} L</div>}
+             {reportDetails.initialRobMeOil !== null && <div><strong>ME Oil:</strong> {reportDetails.initialRobMeOil?.toFixed(1)} L</div>}
+             {reportDetails.initialRobAeOil !== null && <div><strong>AE Oil:</strong> {reportDetails.initialRobAeOil?.toFixed(1)} L</div>}
+           </div>
+         </section>
+       )}
 
         {/* --- Machinery ME --- Conditionally render this whole section */}
         {reportDetails.reportType !== 'berth' && (
@@ -324,9 +381,49 @@ const ReportReviewPage: React.FC = () => {
       {reportDetails.status === 'pending' && (
         <div className="bg-white p-6 rounded-lg shadow">
            <h2 className="text-xl font-semibold mb-4">Review Action</h2>
+           
+           {/* Checklist for 'Changes Requested' - only for Departure reports initially */}
+           {reportDetails.reportType === 'departure' && (
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Request Modifications (Check items to allow captain to edit):</h3>
+              <div className="space-y-2 max-h-60 overflow-y-auto border p-3 rounded">
+                {currentChecklist.map(item => (
+                  <div key={item.id} className="flex items-center">
+                    <input
+                      id={`checklist-${item.id}`}
+                      name={`checklist-${item.id}`}
+                      type="checkbox"
+                      checked={selectedChecklistItems.includes(item.id)}
+                      onChange={() => handleChecklistItemChange(item.id)}
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      disabled={isSubmitting}
+                    />
+                    <label htmlFor={`checklist-${item.id}`} className="ml-2 block text-sm text-gray-900">
+                      {item.label} <span className="text-xs text-gray-500">({item.category})</span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4">
+                <label htmlFor="requestedChangesComment" className="block text-sm font-medium text-gray-700 mb-1">
+                  Comments for Captain (Regarding Changes)
+                </label>
+                <textarea
+                  id="requestedChangesComment"
+                  rows={3}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  value={requestedChangesComment}
+                  onChange={(e) => setRequestedChangesComment(e.target.value)}
+                  placeholder="e.g., Please verify FASP coordinates and ME LSIFO consumption."
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+           )}
+
            <div className="mb-4">
             <label htmlFor="reviewComments" className="block text-sm font-medium text-gray-700 mb-1">
-               Review Comments (Optional)
+               General Review Comments (Optional, for Approve/Reject)
             </label>
             <textarea
                id="reviewComments"
@@ -340,24 +437,39 @@ const ReportReviewPage: React.FC = () => {
 
          {submitError && <p className="text-red-600 mb-4">{submitError}</p>}
 
-         <div className="flex justify-end space-x-4">
+         <div className="flex flex-wrap justify-end space-x-0 sm:space-x-4 space-y-2 sm:space-y-0">
             <button
                onClick={() => handleReviewSubmit('rejected')}
                disabled={isSubmitting}
-               className={`px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out ${
-                  isSubmitting 
-                     ? 'bg-red-300 cursor-not-allowed' 
+               className={`w-full sm:w-auto px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out mb-2 sm:mb-0 ${
+                  isSubmitting
+                     ? 'bg-red-300 cursor-not-allowed'
                      : 'bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'
                }`}
             >
                {isSubmitting ? 'Submitting...' : 'Reject'}
             </button>
+            {/* "Request Changes" button - only for Departure reports initially */}
+            {reportDetails.reportType === 'departure' && (
+              <button
+                onClick={() => handleReviewSubmit('changes_requested')}
+                disabled={isSubmitting || selectedChecklistItems.length === 0} // Disable if no checklist items selected
+                className={`w-full sm:w-auto px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out mb-2 sm:mb-0 ${
+                  (isSubmitting || selectedChecklistItems.length === 0)
+                      ? 'bg-orange-300 cursor-not-allowed'
+                      : 'bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-400'
+                }`}
+                title={selectedChecklistItems.length === 0 ? "Select at least one item from the checklist to request changes" : ""}
+              >
+                {isSubmitting ? 'Submitting...' : 'Request Changes'}
+              </button>
+            )}
             <button
                onClick={() => handleReviewSubmit('approved')}
                disabled={isSubmitting}
-                className={`px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out ${
-                  isSubmitting 
-                     ? 'bg-green-300 cursor-not-allowed' 
+                className={`w-full sm:w-auto px-4 py-2 rounded-md text-white font-medium transition duration-150 ease-in-out ${
+                  isSubmitting
+                     ? 'bg-green-300 cursor-not-allowed'
                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                }`}
             >

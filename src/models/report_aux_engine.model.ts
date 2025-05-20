@@ -53,6 +53,18 @@ export const ReportAuxEngineModel = {
     `);
     return stmt.all(reportId) as AuxEngineData[];
   },
+
+  // Delete all aux engine records for a specific report
+  deleteByReportId(reportId: string): boolean {
+    const stmt = db.prepare('DELETE FROM report_aux_engines WHERE reportId = ?');
+    try {
+      stmt.run(reportId);
+      return true;
+    } catch (error) {
+      console.error(`Error deleting aux engines for report ${reportId}:`, error);
+      return false;
+    }
+  },
 };
 
 export default ReportAuxEngineModel;

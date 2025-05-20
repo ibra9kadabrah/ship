@@ -51,6 +51,18 @@ export const ReportEngineUnitModel = {
     `);
     return stmt.all(reportId) as EngineUnitData[];
   },
+
+  // Delete all engine unit records for a specific report
+  deleteByReportId(reportId: string): boolean {
+    const stmt = db.prepare('DELETE FROM report_engine_units WHERE reportId = ?');
+    try {
+      stmt.run(reportId);
+      return true;
+    } catch (error) {
+      console.error(`Error deleting engine units for report ${reportId}:`, error);
+      return false;
+    }
+  },
 };
 
 export default ReportEngineUnitModel;

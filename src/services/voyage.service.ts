@@ -22,10 +22,13 @@ export const VoyageService = {
       return 'NO_VOYAGE_ACTIVE';
     }
 
-    // --- NEW: Check for pending status first ---
-    if (latestReport.status === 'pending') {
-      // If the latest report is pending, block all new submissions.
-      return 'REPORT_PENDING'; 
+    // --- NEW: Check for pending or changes_requested status first ---
+    if (latestReport.status === 'pending' || latestReport.status === 'changes_requested') {
+      // If the latest report is pending or needs changes, block all new submissions for subsequent reports.
+      // If this latest report IS a departure report, the voyage isn't truly active yet.
+      // If it's a later report type (e.g. Noon) that's pending/changes_requested, the voyage itself is active, but new reports are blocked.
+      // For the dashboard's purpose of enabling forms, 'REPORT_PENDING' should suffice.
+      return 'REPORT_PENDING';
     }
     // --- END NEW ---
 
@@ -43,9 +46,13 @@ export const VoyageService = {
       if (latestReport.status === 'rejected') {
         // If the latest departure was rejected, the vessel is ready for a new departure.
         return 'NO_VOYAGE_ACTIVE';
-      } else {
-        // If the latest departure is pending or approved, the voyage is considered active.
+      } else if (latestReport.status === 'approved') {
+        // Only if the latest departure is APPROVED, the voyage is considered active.
         return 'DEPARTED';
+      } else {
+        // If departure is any other status (e.g. somehow not caught by pending/changes_requested above, though unlikely)
+        // treat as if no voyage is active for form enabling purposes.
+        return 'NO_VOYAGE_ACTIVE';
       }
     }
 

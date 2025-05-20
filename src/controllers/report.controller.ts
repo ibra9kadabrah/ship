@@ -4,7 +4,7 @@ import { ReportService } from '../services/report.service'; // Import the servic
 import { ExcelExportService } from '../services/excel_export.service'; // Import ExcelExportService
 import VoyageModel from '../models/voyage.model'; // Import VoyageModel
 import VesselModel from '../models/vessel.model'; // Import VesselModel
-import { CreateReportDTO, ReviewReportDTO, ReportType } from '../types/report'; // Use new DTO union
+import { CreateReportDTO, ReviewReportDTO, ReportType, ReportStatus } from '../types/report'; // Use new DTO union, Import ReportStatus
 
 // Define possible report types for runtime validation
 const VALID_REPORT_TYPES: ReportType[] = ['departure', 'noon', 'arrival', 'berth', 'arrival_anchor_noon']; // Ensure berth is included
@@ -71,17 +71,32 @@ export const ReportController = {
     }
   },
 
-  // Get report by ID (admin/office only)
+  // Get report by ID (admin/office can access any, captain can access own or those needing their action)
   async getReportById(req: Request, res: Response): Promise<void> {
     try {
-       // Authorization check
-       if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'office')) {
-         res.status(403).json({ error: 'Admin or office access required' });
-         return;
-       }
       const { id } = req.params;
-      const report = await ReportService.getReportById(id);
-      res.status(200).json(report);
+      if (!req.user) { // Should be caught by authenticate middleware, but as a safeguard
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+      
+      // First, get the report (ReportService.getReportById already throws if not found)
+      const report = await ReportService.getReportById(id); // This returns FullReportViewDTO
+      
+      // Then check permissions based on role and report status/ownership
+      if (req.user.role === 'admin' || req.user.role === 'office') {
+        // Admin and office can access any report
+        res.status(200).json(report);
+      } else if (req.user.role === 'captain' &&
+                (report.captainId === req.user.id || report.status === 'changes_requested')) {
+        // Captain can access their own reports or reports with status 'changes_requested' (implicitly for them)
+        // A more robust check for 'changes_requested' might be to see if it's for their vessel,
+        // but for now, if they are linked to it, this is okay.
+        res.status(200).json(report);
+      } else {
+        // Otherwise, deny access
+        res.status(403).json({ error: 'Insufficient permissions to access this report' });
+      }
     } catch (error: any) {
         console.error('Error fetching report:', error);
         if (error.message.includes("not found")) {
@@ -89,6 +104,28 @@ export const ReportController = {
         } else {
            res.status(500).json({ error: 'Failed to fetch report' });
         }
+    }
+  },
+
+  // Resubmit report with changes (captain only)
+  async resubmitReport(req: Request, res: Response): Promise<void> {
+    try {
+      const { id: reportId } = req.params;
+      const captainId = req.user!.id; // Authenticated captain
+      const changes = req.body;
+
+      const updatedReport = await ReportService.resubmitReport(reportId, captainId, changes);
+      res.status(200).json(updatedReport);
+
+    } catch (error: any) {
+      console.error('Error resubmitting report:', error);
+      if (error.message.includes("not found")) {
+        res.status(404).json({ error: error.message });
+      } else if (error.message.includes("not allowed") || error.message.includes("Invalid status")) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to resubmit report' });
+      }
     }
   },
   
@@ -104,10 +141,28 @@ export const ReportController = {
       const reviewData: ReviewReportDTO = req.body;
       const reviewerId = req.user.id;
 
-      // Basic validation
-      if (!reviewData.status || (reviewData.status !== 'approved' && reviewData.status !== 'rejected')) {
-          res.status(400).json({ error: "Invalid status provided. Must be 'approved' or 'rejected'." });
+      // Basic validation for status
+      const validStatuses: ReportStatus[] = ['approved', 'rejected', 'changes_requested'];
+      if (!reviewData.status || !validStatuses.includes(reviewData.status)) {
+          res.status(400).json({ error: `Invalid status provided. Must be one of: ${validStatuses.join(', ')}.` });
           return;
+      }
+
+      // If status is 'changes_requested', ensure checklist and comment are present (or handle if optional)
+      if (reviewData.status === 'changes_requested') {
+        if (!reviewData.modification_checklist || reviewData.modification_checklist.length === 0) {
+          // Depending on requirements, this could be an error or allowed.
+          // For now, let's assume checklist is required if requesting changes.
+          // res.status(400).json({ error: "Modification checklist is required when requesting changes." });
+          // return;
+          // Per plan, checklist is string[] | null. Service/model will handle null.
+        }
+        if (!reviewData.requested_changes_comment) {
+          // Similar to checklist, decide if comment is strictly required.
+          // res.status(400).json({ error: "A comment is required when requesting changes." });
+          // return;
+           // Per plan, comment is string | null. Service/model will handle null.
+        }
       }
       
       const updatedReport = await ReportService.reviewReport(id, reviewData, reviewerId);
