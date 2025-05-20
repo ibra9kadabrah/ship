@@ -3,8 +3,9 @@ import apiClient from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { VesselInfo } from '../../types/vessel';
 // Import necessary types including machinery
-import { BerthFormData, CardinalDirection, CurrentVoyageDetails, CargoStatus, AuxEngineData } from '../../types/report'; // Removed EngineUnitData
+import { BerthFormData, CardinalDirection, CurrentVoyageDetails, CargoStatus, AuxEngineData, FullReportViewDTO, ReportAuxEngine } from '../../types/report'; // Added ReportAuxEngine
 import { useNavigate } from 'react-router-dom';
+import { berthChecklistItems, ChecklistItem } from '../../config/reportChecklists'; // Corrected import path and added ChecklistItem
 // Removed BunkerConsumptionSection, MachineryMEParamsSection, EngineUnitsSection imports
 import BunkerSupplySection from './sections/BunkerSupplySection';
 import AuxEnginesSection from './sections/AuxEnginesSection';
@@ -22,9 +23,32 @@ const initializeAuxEngines = (): AuxEngineData[] => {
 };
 
 
-const BerthForm: React.FC = () => {
+interface BerthFormProps {
+  reportIdToModify?: string;
+  initialData?: FullReportViewDTO; // Used if page is loaded directly in modify mode with pre-fetched data
+  // Add props for checklist and comments passed from modification page
+  activeModificationChecklistFromPage?: string[];
+  officeChangesCommentFromPage?: string | null;
+}
+
+const BerthForm: React.FC<BerthFormProps> = ({
+  reportIdToModify,
+  initialData,
+  activeModificationChecklistFromPage,
+  officeChangesCommentFromPage
+}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Modification mode states
+  const [isModifyMode, setIsModifyMode] = useState<boolean>(!!reportIdToModify);
+  const [initialReportData, setInitialReportData] = useState<FullReportViewDTO | null>(initialData || null);
+  // Initialize with prop from page if available, otherwise default to empty/null
+  const [activeModificationChecklist, setActiveModificationChecklist] = useState<string[]>(activeModificationChecklistFromPage || []);
+  const [officeChangesComment, setOfficeChangesComment] = useState<string | null>(officeChangesCommentFromPage || null);
+  const [isLoadingReportToModify, setIsLoadingReportToModify] = useState<boolean>(false);
+
+  // Existing states
   const [vesselInfo, setVesselInfo] = useState<VesselInfo | null>(null);
   const [voyageDetails, setVoyageDetails] = useState<CurrentVoyageDetails | null>(null);
   const [formData, setFormData] = useState<BerthFormData>({
@@ -64,7 +88,118 @@ const BerthForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch vessel info and voyage details
+  // Helper function to map FullReportViewDTO to BerthFormData
+  const mapReportToBerthFormData = (report: FullReportViewDTO): BerthFormData => {
+    return {
+      reportType: 'berth',
+      vesselId: report.vesselId,
+      reportDate: report.reportDate.split('T')[0], // Format date
+      reportTime: report.reportTime,
+      timeZone: report.timeZone,
+
+      // Berth Specific Data
+      berthDate: report.berthDate?.split('T')[0] || '',
+      berthTime: report.berthTime || '',
+      berthLatDeg: report.berthLatDeg?.toString() || '',
+      berthLatMin: report.berthLatMin?.toString() || '',
+      berthLatDir: report.berthLatDir || 'N',
+      berthLonDeg: report.berthLonDeg?.toString() || '',
+      berthLonMin: report.berthLonMin?.toString() || '',
+      berthLonDir: report.berthLonDir || 'E',
+      berthNumber: report.berthNumber || '',
+
+      // Cargo Ops Data
+      cargoOpsStartDate: report.cargoOpsStartDate?.split('T')[0] || '',
+      cargoOpsStartTime: report.cargoOpsStartTime || '',
+      cargoOpsEndDate: report.cargoOpsEndDate?.split('T')[0] || '',
+      cargoOpsEndTime: report.cargoOpsEndTime || '',
+      cargoLoaded: report.cargoLoaded?.toString() || '', // Convert number to string for form
+      cargoUnloaded: report.cargoUnloaded?.toString() || '', // Convert number to string for form
+
+      // Weather
+      windDirection: report.windDirection || 'N',
+      windForce: report.windForce?.toString() || '',
+      seaDirection: report.seaDirection || 'N',
+      seaState: report.seaState?.toString() || '',
+      swellDirection: report.swellDirection || 'N',
+      swellHeight: report.swellHeight?.toString() || '',
+
+      // Bunkers (Consumption) - ME is N/A for Berth, Boiler/Aux are relevant
+      boilerConsumptionLsifo: report.boilerConsumptionLsifo?.toString() || '',
+      boilerConsumptionLsmgo: report.boilerConsumptionLsmgo?.toString() || '',
+      auxConsumptionLsifo: report.auxConsumptionLsifo?.toString() || '',
+      auxConsumptionLsmgo: report.auxConsumptionLsmgo?.toString() || '',
+      // ME Consumption fields from BaseReportFormData that are not applicable to Berth
+      // but might be expected by shared components if not handled carefully.
+      // For BerthForm, these are not directly used but mapping them defensively.
+      meConsumptionLsifo: report.meConsumptionLsifo?.toString() || '',
+      meConsumptionLsmgo: report.meConsumptionLsmgo?.toString() || '',
+      meConsumptionCylOil: report.meConsumptionCylOil?.toString() || '',
+      meConsumptionMeOil: report.meConsumptionMeOil?.toString() || '',
+      meConsumptionAeOil: report.meConsumptionAeOil?.toString() || '',
+
+      // Bunkers (Supply)
+      supplyLsifo: report.supplyLsifo?.toString() || '',
+      supplyLsmgo: report.supplyLsmgo?.toString() || '',
+      supplyCylOil: report.supplyCylOil?.toString() || '',
+      supplyMeOil: report.supplyMeOil?.toString() || '',
+      supplyAeOil: report.supplyAeOil?.toString() || '',
+
+      // Machinery (ME Params) - N/A for Berth. Map from FullReportViewDTO if present.
+      meFoPressure: report.meFoPressure?.toString() || '',
+      meLubOilPressure: report.meLubOilPressure?.toString() || '',
+      meFwInletTemp: report.meFwInletTemp?.toString() || '',
+      meLoInletTemp: report.meLoInletTemp?.toString() || '',
+      meScavengeAirTemp: report.meScavengeAirTemp?.toString() || '',
+      meTcRpm1: report.meTcRpm1?.toString() || '',
+      meTcRpm2: report.meTcRpm2?.toString() || '',
+      meTcExhaustTempIn: report.meTcExhaustTempIn?.toString() || '',
+      meTcExhaustTempOut: report.meTcExhaustTempOut?.toString() || '',
+      meThrustBearingTemp: report.meThrustBearingTemp?.toString() || '',
+      meDailyRunHours: report.meDailyRunHours?.toString() || '',
+      mePresentRpm: report.mePresentRpm?.toString() || '',
+      meCurrentSpeed: report.meCurrentSpeed?.toString() || '',
+
+      // Aux Engines (FullReportViewDTO has auxEngines: ReportAuxEngine[])
+      auxEngines: report.auxEngines?.map((ae: import('../../types/report').ReportAuxEngine): AuxEngineData => ({
+        engineName: ae.engineName,
+        load: ae.load?.toString() || '',
+        kw: ae.kw?.toString() || '',
+        foPress: ae.foPress?.toString() || '',
+        lubOilPress: ae.lubOilPress?.toString() || '',
+        waterTemp: ae.waterTemp?.toString() || '',
+        dailyRunHour: ae.dailyRunHour?.toString() || '',
+      })) || initializeAuxEngines(),
+      // engineUnits are not part of BerthFormData
+    };
+  };
+
+  // --- Modification Mode Helper Functions ---
+  const isFieldEditable = (fieldName: string): boolean => {
+    if (!isModifyMode) return true; // All fields editable if not in modify mode
+    if (activeModificationChecklist.length === 0) return false; // No fields editable if no checklist items selected
+
+    // Check if the fieldName is affected by any of the active checklist items
+    return berthChecklistItems.some((item: ChecklistItem) =>
+      activeModificationChecklist.includes(item.id) && item.fields_affected.includes(fieldName)
+    );
+  };
+
+  const isSectionEditable = (sectionId: string): boolean => {
+    if (!isModifyMode) return true;
+    if (activeModificationChecklist.length === 0) return false;
+
+    // Check if the sectionId (which corresponds to a checklist item id) is in the active list
+    // This is a simpler check if a whole section is controlled by one checklist item.
+    // For more granular control, iterate fields within the section using isFieldEditable.
+    const sectionChecklistItem = berthChecklistItems.find((item: ChecklistItem) => item.id === sectionId);
+    if (!sectionChecklistItem) return false; // Section ID not found in checklist config
+
+    return activeModificationChecklist.includes(sectionId);
+  };
+  // --- End Modification Mode Helper Functions ---
+
+  // Fetch vessel info and voyage details (runs on initial load)
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -102,6 +237,52 @@ const BerthForm: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  // Effect for fetching report data in modification mode
+  useEffect(() => {
+    if (isModifyMode && reportIdToModify && !initialReportData) {
+      const fetchReportToModify = async () => {
+        setIsLoadingReportToModify(true);
+        setError(null);
+        try {
+          // Corrected path: remove '/api' prefix as it's in baseURL
+          const response = await apiClient.get<FullReportViewDTO>(`/reports/${reportIdToModify}`);
+          const reportData = response.data;
+          setInitialReportData(reportData);
+          setFormData(mapReportToBerthFormData(reportData));
+          
+          // Extract checklist and comment from the fetched report
+          // Only set if not already provided by props (props take precedence)
+          if (!activeModificationChecklistFromPage && reportData.status === 'changes_requested' && reportData.modification_checklist) {
+            setActiveModificationChecklist(reportData.modification_checklist);
+          }
+          if (!officeChangesCommentFromPage && reportData.status === 'changes_requested' && reportData.requested_changes_comment) {
+            setOfficeChangesComment(reportData.requested_changes_comment);
+          }
+
+        } catch (err: any) {
+          console.error('Failed to fetch report for modification:', err);
+          setError(err.response?.data?.message || 'Failed to load report data for modification.');
+          // Potentially navigate away or disable form if critical data fails to load
+          navigate('/captain', { replace: true, state: { error: 'Failed to load report for modification.' } });
+        } finally {
+          setIsLoadingReportToModify(false);
+        }
+      };
+      fetchReportToModify();
+    } else if (isModifyMode && initialReportData) {
+      // If initialData was provided via props, map it
+      setFormData(mapReportToBerthFormData(initialReportData));
+      // If initialData was provided via props, and props for checklist/comment were not, set them from initialData
+      if (!activeModificationChecklistFromPage && initialReportData.status === 'changes_requested' && initialReportData.modification_checklist) {
+        setActiveModificationChecklist(initialReportData.modification_checklist);
+      }
+      if (!officeChangesCommentFromPage && initialReportData.status === 'changes_requested' && initialReportData.requested_changes_comment) {
+        setOfficeChangesComment(initialReportData.requested_changes_comment);
+      }
+    }
+  }, [isModifyMode, reportIdToModify, initialReportData, navigate]); // Added initialReportData and navigate to dependencies
+
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -266,10 +447,46 @@ const BerthForm: React.FC = () => {
 
 
     try {
-      // Corrected path: remove '/api' prefix as it's handled by baseURL
-      await apiClient.post('/reports', payload as BerthFormData); // Cast back after deletions
-      setSuccess('Berth report submitted successfully!');
-      setTimeout(() => navigate('/captain'), 1500); // Navigate back after delay
+      if (isModifyMode && reportIdToModify) {
+        // Prepare payload with only editable fields for resubmission
+        const resubmitPayload: Partial<BerthFormData> & { modification_checklist?: string[]; requested_changes_comment?: string | null } = {
+          reportType: 'berth', // Essential for backend routing/validation
+          vesselId: formData.vesselId, // Also essential
+        };
+
+        // Include office changes comment and checklist
+        // These might be sent to a different DTO field on backend like `reviewContext`
+        // For now, sending as per typical modification pattern.
+        // The backend /resubmit endpoint should expect these or similar.
+        resubmitPayload.requested_changes_comment = officeChangesComment;
+        resubmitPayload.modification_checklist = activeModificationChecklist;
+
+        // Iterate over formData keys and add to payload if editable
+        (Object.keys(formData) as Array<keyof BerthFormData>).forEach(key => {
+          if (isFieldEditable(key)) {
+            // Use the already validated and parsed value from the main 'payload' object
+            // which has numeric conversions done.
+            if (payload[key] !== undefined) {
+               (resubmitPayload as any)[key] = payload[key];
+            }
+          }
+        });
+        
+        // Ensure auxEngines are included if the section was editable
+        // The `isFieldEditable('auxEngines')` check relies on the checklist item `berth_machinery_aux_engines`
+        if (isFieldEditable('auxEngines') && payload.auxEngines) {
+            resubmitPayload.auxEngines = payload.auxEngines;
+        }
+
+        await apiClient.patch(`/reports/${reportIdToModify}/resubmit`, resubmitPayload);
+        setSuccess('Berth report resubmitted successfully!');
+        setTimeout(() => navigate('/captain'), 1500);
+      } else {
+        // Original submission logic
+        await apiClient.post('/reports', payload as BerthFormData);
+        setSuccess('Berth report submitted successfully!');
+        setTimeout(() => navigate('/captain'), 1500);
+      }
     } catch (err: any) {
       console.error('Submission error:', err);
       setError(err.response?.data?.message || err.response?.data?.error || 'Failed to submit report.');
@@ -325,13 +542,41 @@ const BerthForm: React.FC = () => {
       {/* Only show form if vessel and voyage details loaded successfully */}
       {!isLoading && vesselInfo && voyageDetails && (
       <form onSubmit={handleSubmit} className="space-y-6 p-4 bg-white rounded shadow-md"> {/* Consistent form class */}
+        
+        {/* Display Office Change Request Information */}
+        {isModifyMode && (officeChangesComment || activeModificationChecklist.length > 0) && (
+          <div className="mb-6 p-4 border border-orange-300 bg-orange-50 rounded-md shadow-sm">
+            <h3 className="text-lg font-semibold text-orange-700 mb-2">Office Change Request</h3>
+            {officeChangesComment && (
+              <p className="text-sm text-orange-600 mb-3 whitespace-pre-wrap">
+                <strong>Comment:</strong> {officeChangesComment}
+              </p>
+            )}
+            {activeModificationChecklist.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-orange-600 mb-1"><strong>Requested Changes:</strong></p>
+                <ul className="list-disc list-inside pl-4 space-y-1">
+                  {activeModificationChecklist.map(itemId => {
+                    const itemDetail = berthChecklistItems.find(ci => ci.id === itemId);
+                    return (
+                      <li key={itemId} className="text-sm text-orange-600">
+                        {itemDetail ? itemDetail.label : itemId}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
       {/* General Information Section */}
       <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
         <legend className="text-lg font-medium px-2">General Info</legend> {/* Consistent legend class & text */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> {/* Consistent grid */}
-          <div><label htmlFor="reportDate" className="block text-sm font-medium text-gray-700">Report Date</label><input type="date" id="reportDate" name="reportDate" value={formData.reportDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div> {/* Consistent label/input */}
-          <div><label htmlFor="reportTime" className="block text-sm font-medium text-gray-700">Report Time</label><input type="time" id="reportTime" name="reportTime" value={formData.reportTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-          <div><label htmlFor="timeZone" className="block text-sm font-medium text-gray-700">Time Zone</label><input type="text" id="timeZone" name="timeZone" value={formData.timeZone} onChange={handleChange} required placeholder="e.g., UTC+3" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
+          <div><label htmlFor="reportDate" className="block text-sm font-medium text-gray-700">Report Date</label><input type="date" id="reportDate" name="reportDate" value={formData.reportDate} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('reportDate') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('reportDate')}/></div>
+          <div><label htmlFor="reportTime" className="block text-sm font-medium text-gray-700">Report Time</label><input type="time" id="reportTime" name="reportTime" value={formData.reportTime} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('reportTime') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('reportTime')}/></div>
+          <div><label htmlFor="timeZone" className="block text-sm font-medium text-gray-700">Time Zone</label><input type="text" id="timeZone" name="timeZone" value={formData.timeZone} onChange={handleChange} required placeholder="e.g., UTC+3" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('timeZone') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('timeZone')}/></div>
         </div>
       </fieldset>
 
@@ -339,8 +584,8 @@ const BerthForm: React.FC = () => {
           <fieldset className="border p-4 rounded"> {/* Consistent fieldset class */}
             <legend className="text-lg font-medium px-2">Berth Details</legend> {/* Consistent legend class */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"> {/* Date/Time */}
-               <div><label htmlFor="berthDate" className="block text-sm font-medium text-gray-700">Berth Date</label><input type="date" id="berthDate" name="berthDate" value={formData.berthDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div> {/* Consistent label/input */}
-               <div><label htmlFor="berthTime" className="block text-sm font-medium text-gray-700">Berth Time</label><input type="time" id="berthTime" name="berthTime" value={formData.berthTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
+               <div><label htmlFor="berthDate" className="block text-sm font-medium text-gray-700">Berth Date</label><input type="date" id="berthDate" name="berthDate" value={formData.berthDate} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('berthDate') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('berthDate')}/></div>
+               <div><label htmlFor="berthTime" className="block text-sm font-medium text-gray-700">Berth Time</label><input type="time" id="berthTime" name="berthTime" value={formData.berthTime} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('berthTime') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('berthTime')}/></div>
              </div>
              {/* Replace Berth Lat/Lon inputs with CoordinateInputGroup */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -355,6 +600,7 @@ const BerthForm: React.FC = () => {
                     onDirectionChange={(e) => handleCoordinateChange('berthLat', 'Dir', e.target.value)}
                     directionOptions={['N', 'S']}
                     required={true}
+                    disabled={isModifyMode && !isSectionEditable('berth_location_details')}
                  />
                  <CoordinateInputGroup
                     label="Berth Longitude"
@@ -367,12 +613,13 @@ const BerthForm: React.FC = () => {
                     onDirectionChange={(e) => handleCoordinateChange('berthLon', 'Dir', e.target.value)}
                     directionOptions={['E', 'W']}
                     required={true}
+                    disabled={isModifyMode && !isSectionEditable('berth_location_details')}
                  />
              </div>
              {/* Add Berth Number Input */}
              <div className="mt-4">
                 <label htmlFor="berthNumber" className="block text-sm font-medium text-gray-700">Berth Number</label>
-                <input type="text" id="berthNumber" name="berthNumber" value={formData.berthNumber} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/>
+                <input type="text" id="berthNumber" name="berthNumber" value={formData.berthNumber} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('berthNumber') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('berthNumber')}/>
              </div>
           </fieldset>
 
@@ -384,21 +631,21 @@ const BerthForm: React.FC = () => {
                  {/* Cargo Loaded */}
                  <div>
                     <label htmlFor="cargoLoaded" className="block text-sm font-medium text-gray-700">Cargo Loaded (MT)</label>
-                    <input type="number" step="0.01" id="cargoLoaded" name="cargoLoaded" value={formData.cargoLoaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Removed required */}
+                    <input type="number" step="0.01" id="cargoLoaded" name="cargoLoaded" value={formData.cargoLoaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoLoaded') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoLoaded')}/>
                 </div>
                  {/* Cargo Unloaded */}
                  <div>
                     <label htmlFor="cargoUnloaded" className="block text-sm font-medium text-gray-700">Cargo Unloaded (MT)</label>
-                    <input type="number" step="0.01" id="cargoUnloaded" name="cargoUnloaded" value={formData.cargoUnloaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/> {/* Removed required */}
+                    <input type="number" step="0.01" id="cargoUnloaded" name="cargoUnloaded" value={formData.cargoUnloaded ?? ''} onChange={handleChange} min="0" placeholder="0.00" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoUnloaded') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoUnloaded')}/>
                 </div>
                  {/* Cargo Ops Times - moved to next row or adjust grid */}
                  {/* Let's keep times below for clarity */}
              </div>
              <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* New grid for times */}
-                 <div><label htmlFor="cargoOpsStartDate" className="block text-sm font-medium text-gray-700">Ops Start Date</label><input type="date" id="cargoOpsStartDate" name="cargoOpsStartDate" value={formData.cargoOpsStartDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-                 <div><label htmlFor="cargoOpsStartTime" className="block text-sm font-medium text-gray-700">Ops Start Time</label><input type="time" id="cargoOpsStartTime" name="cargoOpsStartTime" value={formData.cargoOpsStartTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-                 <div><label htmlFor="cargoOpsEndDate" className="block text-sm font-medium text-gray-700">Ops End Date</label><input type="date" id="cargoOpsEndDate" name="cargoOpsEndDate" value={formData.cargoOpsEndDate} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-                 <div><label htmlFor="cargoOpsEndTime" className="block text-sm font-medium text-gray-700">Ops End Time</label><input type="time" id="cargoOpsEndTime" name="cargoOpsEndTime" value={formData.cargoOpsEndTime} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
+                 <div><label htmlFor="cargoOpsStartDate" className="block text-sm font-medium text-gray-700">Ops Start Date</label><input type="date" id="cargoOpsStartDate" name="cargoOpsStartDate" value={formData.cargoOpsStartDate} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoOpsStartDate') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoOpsStartDate')}/></div>
+                 <div><label htmlFor="cargoOpsStartTime" className="block text-sm font-medium text-gray-700">Ops Start Time</label><input type="time" id="cargoOpsStartTime" name="cargoOpsStartTime" value={formData.cargoOpsStartTime} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoOpsStartTime') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoOpsStartTime')}/></div>
+                 <div><label htmlFor="cargoOpsEndDate" className="block text-sm font-medium text-gray-700">Ops End Date</label><input type="date" id="cargoOpsEndDate" name="cargoOpsEndDate" value={formData.cargoOpsEndDate} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoOpsEndDate') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoOpsEndDate')}/></div>
+                 <div><label htmlFor="cargoOpsEndTime" className="block text-sm font-medium text-gray-700">Ops End Time</label><input type="time" id="cargoOpsEndTime" name="cargoOpsEndTime" value={formData.cargoOpsEndTime} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('cargoOpsEndTime') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('cargoOpsEndTime')}/></div>
              </div>
           </fieldset>
 
@@ -407,17 +654,17 @@ const BerthForm: React.FC = () => {
             <legend className="text-lg font-medium px-2">Weather</legend> {/* Consistent legend class */}
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> {/* Consistent grid */}
                {/* Consistent select/input (already match) */}
-               <div><label htmlFor="windDirection" className="block text-sm font-medium text-gray-700">Wind Direction</label><select id="windDirection" name="windDirection" value={formData.windDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
-               {/* Consistent input */}
-               <div><label htmlFor="windForce" className="block text-sm font-medium text-gray-700">Wind Force (Beaufort)</label><input type="number" id="windForce" name="windForce" value={formData.windForce} onChange={handleChange} required min="0" max="12" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-               {/* Consistent select */}
-               <div><label htmlFor="seaDirection" className="block text-sm font-medium text-gray-700">Sea Direction</label><select id="seaDirection" name="seaDirection" value={formData.seaDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
-               {/* Consistent input */}
-               <div><label htmlFor="seaState" className="block text-sm font-medium text-gray-700">Sea State (Douglas Scale)</label><input type="number" id="seaState" name="seaState" value={formData.seaState} onChange={handleChange} required min="0" max="9" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
-               {/* Consistent select */}
-               <div><label htmlFor="swellDirection" className="block text-sm font-medium text-gray-700">Swell Direction</label><select id="swellDirection" name="swellDirection" value={formData.swellDirection} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white">{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
-               {/* Consistent input */}
-               <div><label htmlFor="swellHeight" className="block text-sm font-medium text-gray-700">Swell Height (m)</label><input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight} onChange={handleChange} required min="0" className="mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm"/></div>
+               <div><label htmlFor="windDirection" className="block text-sm font-medium text-gray-700">Wind Direction</label><select id="windDirection" name="windDirection" value={formData.windDirection} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !isFieldEditable('windDirection') ? 'bg-gray-100 cursor-not-allowed' : ''}`} disabled={isModifyMode && !isFieldEditable('windDirection')}>{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
+               
+               <div><label htmlFor="windForce" className="block text-sm font-medium text-gray-700">Wind Force (Beaufort)</label><input type="number" id="windForce" name="windForce" value={formData.windForce} onChange={handleChange} required min="0" max="12" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('windForce') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('windForce')}/></div>
+               
+               <div><label htmlFor="seaDirection" className="block text-sm font-medium text-gray-700">Sea Direction</label><select id="seaDirection" name="seaDirection" value={formData.seaDirection} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !isFieldEditable('seaDirection') ? 'bg-gray-100 cursor-not-allowed' : ''}`} disabled={isModifyMode && !isFieldEditable('seaDirection')}>{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
+               
+               <div><label htmlFor="seaState" className="block text-sm font-medium text-gray-700">Sea State (Douglas Scale)</label><input type="number" id="seaState" name="seaState" value={formData.seaState} onChange={handleChange} required min="0" max="9" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('seaState') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('seaState')}/></div>
+               
+               <div><label htmlFor="swellDirection" className="block text-sm font-medium text-gray-700">Swell Direction</label><select id="swellDirection" name="swellDirection" value={formData.swellDirection} onChange={handleChange} required className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm bg-white ${isModifyMode && !isFieldEditable('swellDirection') ? 'bg-gray-100 cursor-not-allowed' : ''}`} disabled={isModifyMode && !isFieldEditable('swellDirection')}>{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => <option key={dir} value={dir}>{dir}</option>)}</select></div>
+               
+               <div><label htmlFor="swellHeight" className="block text-sm font-medium text-gray-700">Swell Height (m)</label><input type="number" step="0.1" id="swellHeight" name="swellHeight" value={formData.swellHeight} onChange={handleChange} required min="0" className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${isModifyMode && !isFieldEditable('swellHeight') ? 'bg-gray-100 cursor-not-allowed' : ''}`} readOnly={isModifyMode && !isFieldEditable('swellHeight')}/></div>
              </div>
           </fieldset>
 
@@ -428,6 +675,7 @@ const BerthForm: React.FC = () => {
               formData={formData}
               handleChange={handleChange}
               title="Supply (Since Last)"
+              disabled={isModifyMode && !isSectionEditable('berth_bunker_supplies')}
             />
           </fieldset>
 
@@ -438,6 +686,7 @@ const BerthForm: React.FC = () => {
             <AuxEnginesSection
               auxEngines={formData.auxEngines || []}
               handleAuxEngineChange={handleAuxEngineChange}
+              disabled={isModifyMode && !isSectionEditable('berth_machinery_aux_engines')}
             />
           </fieldset>
 
@@ -449,12 +698,12 @@ const BerthForm: React.FC = () => {
         {/* Match DepartureForm button style exactly */}
         <button
           type="submit"
-          disabled={isLoading || !vesselInfo || !voyageDetails}
+          disabled={isLoading || isLoadingReportToModify || !vesselInfo || !voyageDetails}
           className={`w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out ${
-            (isLoading || !vesselInfo || !voyageDetails) ? 'opacity-70 cursor-not-allowed' : '' // Keep disabled logic
+            (isLoading || isLoadingReportToModify || !vesselInfo || !voyageDetails) ? 'opacity-70 cursor-not-allowed' : ''
           }`}
         >
-          {isLoading ? 'Submitting...' : 'Submit Berth Report'} {/* Keep button text */}
+          {isLoading || isLoadingReportToModify ? 'Submitting...' : (isModifyMode ? 'Resubmit Berth Report' : 'Submit Berth Report')}
         </button>
       </div>
     </form>

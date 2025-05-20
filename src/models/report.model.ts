@@ -481,6 +481,19 @@ export const ReportModel = {
     return report || null;
   },
 
+  // Find the latest approved departure report for a specific voyage
+  findLatestApprovedDepartureReportForVoyage(voyageId: string): Partial<Report> | null {
+    const stmt = db.prepare(`
+      SELECT *
+      FROM reports
+      WHERE voyageId = ? AND status = 'approved' AND reportType = 'departure'
+      ORDER BY reportDate DESC, reportTime DESC, createdAt DESC
+      LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Partial<Report> | undefined;
+    return report || null;
+  },
+
   // Get latest *approved* 'Arrival' or 'Berth' report for a vessel
   getLatestApprovedArrivalOrBerthReport(vesselId: string): Partial<Report> | null {
     const stmt = db.prepare(`

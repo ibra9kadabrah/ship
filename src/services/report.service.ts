@@ -18,7 +18,7 @@ import ReportAuxEngineModel from '../models/report_aux_engine.model';
 // Import calculators and validator
 import { calculateTotalConsumptions, calculateCurrentRobs, PreviousRob, TotalConsumptions, BunkerSupplyInput, BunkerConsumptionInput } from './bunker_calculator';
 import { calculateDistances, DistanceCalculationInput, DistanceCalculationOutput } from './distance_calculator';
-import { validateReportInput } from './report_validator';
+import { validateReportInput, validateCargoAgainstVesselCapacity } from './report_validator';
 
 // Helper function to check if all required Initial ROBs are present
 function hasAllInitialRobs(data: CreateReportDTO): data is DepartureSpecificData & { initialRobLsifo: number; initialRobLsmgo: number; initialRobCylOil: number; initialRobMeOil: number; initialRobAeOil: number; } {
@@ -278,21 +278,34 @@ export const ReportService = {
         let calculatedDistanceToGo: number | null = distances.distanceToGo ?? null;
 
         if (reportInput.reportType === 'berth') {
+            console.log(`[DEBUG] Berth report cargo calculation for voyageIdToUse: ${voyageIdToUse}`);
             // --- Corrected Cargo Calculation Logic for Berth ---
-            // Find the most recent report with a cargo quantity (Berth or Departure)
-            const latestBerthReport = ReportModel.getLatestReportForVoyageByType(voyageIdToUse!, 'berth');
-            const departureReport = ReportModel.getFirstReportForVoyage(voyageIdToUse!);
+            // --- Corrected Cargo Calculation Logic for new Berth Report ---
+            const approvedDepartureReport = ReportModel.findLatestApprovedDepartureReportForVoyage(voyageIdToUse!);
+            console.log('[DEBUG] submitReport - approvedDepartureReport:', JSON.stringify(approvedDepartureReport, null, 2));
 
             let baseCargoQuantity = 0;
-            // Safely access cargoQuantity, checking if the property exists and is a number
-            if (latestBerthReport && 'cargoQuantity' in latestBerthReport && typeof latestBerthReport.cargoQuantity === 'number') {
-                baseCargoQuantity = latestBerthReport.cargoQuantity;
-            } else if (departureReport && 'cargoQuantity' in departureReport && typeof departureReport.cargoQuantity === 'number') {
-                baseCargoQuantity = departureReport.cargoQuantity;
+            if (approvedDepartureReport && typeof (approvedDepartureReport as DepartureSpecificData).cargoQuantity === 'number') {
+                baseCargoQuantity = (approvedDepartureReport as DepartureSpecificData).cargoQuantity as number;
+                console.log(`[DEBUG] submitReport - Initial baseCargoQuantity from approved departure: ${baseCargoQuantity}`);
             } else {
-                // Should not happen in a valid voyage, but default to 0 as a safeguard
-                console.warn(`Could not find a previous cargo quantity for voyage ${voyageIdToUse!}. Defaulting to 0.`);
+                console.warn(`[DEBUG] submitReport - Could not find an approved Departure report or its cargoQuantity for voyage ${voyageIdToUse!}. Defaulting baseCargoQuantity to 0.`);
             }
+
+            // Get all previously approved berth reports for this voyage to sum up their operations
+            const previousApprovedBerthReports = ReportModel._getAllReportsForVoyage(voyageIdToUse!)
+                .filter(r => r.reportType === 'berth' && r.status === 'approved' && r.id !== reportId) // ensure not to include itself if somehow it was fetched
+                .sort((a, b) => new Date(`${a.reportDate}T${a.reportTime}`).getTime() - new Date(`${b.reportDate}T${b.reportTime}`).getTime());
+
+            console.log('[DEBUG] submitReport - previousApprovedBerthReports:', JSON.stringify(previousApprovedBerthReports, null, 2));
+
+            for (const prevBerth of previousApprovedBerthReports) {
+                const loaded = (prevBerth as BerthSpecificData).cargoLoaded ?? 0;
+                const unloaded = (prevBerth as BerthSpecificData).cargoUnloaded ?? 0;
+                baseCargoQuantity += loaded - unloaded;
+                console.log(`[DEBUG] submitReport - After prevBerth ${prevBerth.id}: loaded=${loaded}, unloaded=${unloaded}, new baseCargoQuantity=${baseCargoQuantity}`);
+            }
+            console.log(`[DEBUG] submitReport - Final baseCargoQuantity before current op: ${baseCargoQuantity}`);
 
             const cargoLoaded = reportInput.cargoLoaded ?? 0;
             const cargoUnloaded = reportInput.cargoUnloaded ?? 0;
@@ -300,21 +313,12 @@ export const ReportService = {
             // Calculate new quantity based on the correctly identified base quantity
             const newCargoQuantity = baseCargoQuantity + cargoLoaded - cargoUnloaded;
 
-            // Fetch vessel deadweight for validation
-            const vesselDeadweight = vessel.deadweight;
-            if (vesselDeadweight === null || vesselDeadweight === undefined) {
-                // This should ideally not happen if vessel data is complete
-                console.warn(`Vessel ${vessel.id} deadweight is missing. Skipping upper cargo limit validation.`);
-            } else {
-                if (newCargoQuantity > vesselDeadweight) {
-                    throw new Error(`Calculated cargo quantity (${newCargoQuantity} MT) exceeds vessel deadweight (${vesselDeadweight} MT).`);
-                }
-            }
-
-            // Validate non-negative cargo quantity
-            if (newCargoQuantity < 0) {
-                throw new Error(`Calculated cargo quantity (${newCargoQuantity} MT) cannot be negative.`);
-            }
+            // Validate cargo against vessel capacity
+            validateCargoAgainstVesselCapacity(
+              newCargoQuantity,
+              vessel.deadweight,
+              reportInput.reportType
+            );
 
             // Assign the newly calculated quantity
             calculatedCargoQuantity = newCargoQuantity;
@@ -818,6 +822,65 @@ export const ReportService = {
             // If they are in `changes`, it implies the entire array for that section should be replaced.
             const { engineUnits, auxEngines, ...restOfChanges } = changes;
             const updateData: Partial<ReportRecordData> = { ...restOfChanges };
+
+            if (report.reportType === 'berth' && report.voyageId) {
+                // Check if cargoLoaded or cargoUnloaded are part of the changes
+                const changedBerthData = changes as Partial<BerthSpecificData>;
+                const reportAsBerth = report as BerthSpecificData; // Cast for easier access to original values
+
+                if (changedBerthData.cargoLoaded !== undefined || changedBerthData.cargoUnloaded !== undefined) {
+                    if (!report.vesselId) { // Ensure vesselId exists
+                        throw new Error("Vessel ID is missing from the report being resubmitted.");
+                    }
+                    const vessel = VesselModel.findById(report.vesselId);
+                    if (!vessel) {
+                        throw new Error(`Vessel with ID ${report.vesselId} not found during resubmission.`);
+                    }
+
+                    // Fetch all approved reports for the voyage up to the one BEFORE the current report
+                    const voyageReports = ReportModel._getAllReportsForVoyage(report.voyageId)
+                        .filter(r => r.id !== reportId && // Exclude the current report itself from base calculation
+                                     r.status === 'approved' &&
+                                     new Date(`${r.reportDate}T${r.reportTime}`) < new Date(`${report.reportDate}T${report.reportTime}`))
+                        .sort((a, b) => new Date(`${a.reportDate}T${a.reportTime}`).getTime() - new Date(`${b.reportDate}T${b.reportTime}`).getTime());
+
+                    let baseCargoQuantity = 0;
+                    const departureReport = voyageReports.find(r => r.reportType === 'departure');
+
+                    if (departureReport && typeof (departureReport as DepartureSpecificData).cargoQuantity === 'number') {
+                        baseCargoQuantity = (departureReport as DepartureSpecificData).cargoQuantity as number;
+                    } else {
+                        // If no approved departure report found before this one, try the absolute first report of the voyage
+                        const firstVoyageReport = ReportModel.getFirstReportForVoyage(report.voyageId);
+                        if (firstVoyageReport && firstVoyageReport.reportType === 'departure' && typeof (firstVoyageReport as DepartureSpecificData).cargoQuantity === 'number') {
+                            baseCargoQuantity = (firstVoyageReport as DepartureSpecificData).cargoQuantity as number;
+                        } else {
+                            console.warn(`[Service.resubmitReport] Could not determine initial cargo quantity for voyage ${report.voyageId}. Using 0 as base.`);
+                        }
+                    }
+
+                    // Apply changes from subsequent approved berth reports up to the one before the current
+                    voyageReports.forEach(prevReport => {
+                        if (prevReport.reportType === 'berth') {
+                            const prevBerth = prevReport as BerthSpecificData;
+                            const prevLoaded = prevBerth.cargoLoaded ?? 0;
+                            const prevUnloaded = prevBerth.cargoUnloaded ?? 0;
+                            baseCargoQuantity += prevLoaded - prevUnloaded;
+                        }
+                    });
+                    
+                    const currentCargoLoaded = changedBerthData.cargoLoaded !== undefined ? Number(changedBerthData.cargoLoaded) : Number(reportAsBerth.cargoLoaded ?? 0);
+                    const currentCargoUnloaded = changedBerthData.cargoUnloaded !== undefined ? Number(changedBerthData.cargoUnloaded) : Number(reportAsBerth.cargoUnloaded ?? 0);
+                    const newCargoQuantityForThisBerthOp = baseCargoQuantity + currentCargoLoaded - currentCargoUnloaded;
+
+                    validateCargoAgainstVesselCapacity(
+                        newCargoQuantityForThisBerthOp,
+                        vessel.deadweight,
+                        'berth'
+                    );
+                    updateData.cargoQuantity = newCargoQuantityForThisBerthOp;
+                }
+            }
 
             // Reset review fields and status
             updateData.status = 'pending';

@@ -131,11 +131,11 @@ const ReportReviewPage: React.FC = () => {
               {reportDetails.fwdDraft !== null && <div><strong>Fwd Draft:</strong> {reportDetails.fwdDraft?.toFixed(2)} m</div>}
               {reportDetails.aftDraft !== null && <div><strong>Aft Draft:</strong> {reportDetails.aftDraft?.toFixed(2)} m</div>}
               {/* Display voyage cargo details if available */}
-              {reportDetails.voyageCargoType && <div><strong>Cargo Type:</strong> {reportDetails.voyageCargoType}</div>}
-              {reportDetails.voyageCargoQuantity !== null && <div><strong>Cargo Qty:</strong> {reportDetails.voyageCargoQuantity?.toFixed(2)} MT ({reportDetails.voyageCargoStatus})</div>}
-              {/* Display report-specific cargo if different (e.g., berth) */}
-              {reportDetails.reportType === 'berth' && reportDetails.cargoQuantity !== reportDetails.voyageCargoQuantity && (
-                 <div><strong>Current Cargo Qty:</strong> {reportDetails.cargoQuantity?.toFixed(2)} MT</div>
+              {reportDetails.voyageCargoType && <div><strong>Cargo Type (at Departure):</strong> {reportDetails.voyageCargoType}</div>}
+              {reportDetails.voyageCargoQuantity !== null && <div><strong>Cargo at Departure:</strong> {reportDetails.voyageCargoQuantity?.toFixed(2)} MT ({reportDetails.voyageCargoStatus})</div>}
+              {/* Display final cargo quantity for Berth reports */}
+              {reportDetails.reportType === 'berth' && reportDetails.cargoQuantity !== null && (
+                 <div><strong>Cargo After Berth Ops:</strong> {reportDetails.cargoQuantity?.toFixed(2)} MT</div>
               )}
             </div>
           </section>
@@ -205,6 +205,19 @@ const ReportReviewPage: React.FC = () => {
                 {reportDetails.avgSpeedVoyage !== null && <div><strong>Avg Speed (Voyage):</strong> {reportDetails.avgSpeedVoyage?.toFixed(1)} knots</div>}
              </div>
          </section>
+
+        {/* --- Cargo Operations (Berth Report Specific) --- */}
+        {reportDetails.reportType === 'berth' && (
+          <section>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-3 text-gray-700">Cargo Operations</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+              {reportDetails.cargoLoaded !== null && <div><strong>Cargo Loaded:</strong> {reportDetails.cargoLoaded?.toFixed(2)} MT</div>}
+              {reportDetails.cargoUnloaded !== null && <div><strong>Cargo Unloaded:</strong> {reportDetails.cargoUnloaded?.toFixed(2)} MT</div>}
+              {reportDetails.cargoOpsStartDate && <div><strong>Ops Start:</strong> {reportDetails.cargoOpsStartDate} {reportDetails.cargoOpsStartTime}</div>}
+              {reportDetails.cargoOpsEndDate && <div><strong>Ops End:</strong> {reportDetails.cargoOpsEndDate} {reportDetails.cargoOpsEndTime}</div>}
+            </div>
+          </section>
+        )}
 
         {/* --- Weather --- */}
         <section>

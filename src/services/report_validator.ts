@@ -9,7 +9,8 @@ import {
     ArrivalAnchorNoonSpecificData, // Import new type
     PassageState, // Import PassageState
     CargoStatus, // Import CargoStatus
-    Report // Import Report type
+    Report, // Import Report type
+    ReportType
 } from '../types/report';
 import { Vessel } from '../types/vessel'; // Import Vessel type
 
@@ -21,8 +22,33 @@ import { Vessel } from '../types/vessel'; // Import Vessel type
  * @param initialCargoStatus The cargo status from the voyage's departure report.
  * @param vessel The vessel object, needed to check if initial ROBs are set.
  */
+
+// Centralized function to validate cargo against vessel capacity
+export function validateCargoAgainstVesselCapacity(
+    cargoQuantity: number | null | undefined,
+    vesselDeadweight: number | null | undefined,
+    reportType: ReportType
+): void {
+    if (cargoQuantity === undefined || cargoQuantity === null) {
+        return; // Skip validation if cargoQuantity is not provided
+    }
+
+    if (vesselDeadweight === null || vesselDeadweight === undefined) {
+        console.warn(`Vessel deadweight is missing for ${reportType}. Skipping cargo validation.`);
+        return;
+    }
+
+    if (cargoQuantity > vesselDeadweight) {
+        throw new Error(`Cargo quantity (${cargoQuantity} MT) exceeds vessel deadweight (${vesselDeadweight} MT).`);
+    }
+
+    if (cargoQuantity < 0) {
+        throw new Error(`Cargo quantity (${cargoQuantity} MT) cannot be negative.`);
+    }
+}
+
 export function validateReportInput(
-    reportInput: CreateReportDTO, 
+    reportInput: CreateReportDTO,
     vessel: Vessel, // Add vessel parameter
     previousReport: Partial<Report> | null, // Keep previousReport optional for first departure
     initialCargoStatus: CargoStatus | null = null, // Add default null
@@ -32,7 +58,7 @@ export function validateReportInput(
     // --- Report Sequence Validation ---
     // Skip sequence check if the current report is 'departure'.
     // The service layer handles the logic for allowing a new departure based on previous voyage state.
-    if (previousReport && reportInput.reportType !== 'departure') { 
+    if (previousReport && reportInput.reportType !== 'departure') {
         const previousType = previousReport.reportType;
         const currentType = reportInput.reportType;
 
@@ -48,7 +74,7 @@ export function validateReportInput(
                 }
                 break;
             case 'arrival':
-                if (currentType !== 'berth' && currentType !== 'arrival_anchor_noon') { 
+                if (currentType !== 'berth' && currentType !== 'arrival_anchor_noon') {
                     throw new Error(`Invalid report sequence: After 'arrival', only 'berth' or 'arrival_anchor_noon' is allowed within the same voyage, not '${currentType}'.`);
                 }
                 break;
@@ -75,17 +101,17 @@ export function validateReportInput(
     switch (reportInput.reportType) {
         case 'departure':
             // Pass the vessel object to the specific validator
-            validateDepartureReport(reportInput, vessel); 
+            validateDepartureReport(reportInput, vessel);
             break;
         case 'noon':
             // Pass the specific previous noon state to the noon validator
-            validateNoonReport(reportInput, previousNoonPassageState); 
+            validateNoonReport(reportInput, previousNoonPassageState);
             break;
         case 'arrival':
             validateArrivalReport(reportInput);
             break;
         case 'berth':
-            validateBerthReport(reportInput); // Removed initialCargoStatus argument
+            validateBerthReport(reportInput, vessel); // Removed initialCargoStatus argument
             break;
         case 'arrival_anchor_noon':
             validateArrivalAnchorNoonReport(reportInput);
@@ -96,7 +122,7 @@ export function validateReportInput(
     }
 
     // REMOVED: Common machinery validation call from here. It will be called within specific validators.
-    // validateMachineryInput(reportInput); 
+    // validateMachineryInput(reportInput);
 }
 
 // --- Helper Validation Functions ---
@@ -106,10 +132,17 @@ export function validateReportInput(
 // We need to adjust the main validateReportInput function to pass the vessel object here.
 // For now, let's add the logic assuming 'vessel' is available.
 // We will fix the call signature in the next step.
-function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Vessel): void { 
+function validateDepartureReport(reportInput: DepartureSpecificData, vessel: Vessel): void {
 
-    // Check if initial ROBs are provided when they shouldn't be
-    if (vessel.initialRobLsifo !== null) { // Vessel initial ROBs are already set
+  // Validate cargo against vessel capacity
+  validateCargoAgainstVesselCapacity(
+    reportInput.cargoQuantity,
+    vessel.deadweight,
+    reportInput.reportType
+  );
+
+  // Check if initial ROBs are provided when they shouldn't be
+  if (vessel.initialRobLsifo !== null) { // Vessel initial ROBs are already set
         const hasInitialRobInput = (
             reportInput.initialRobLsifo !== undefined && reportInput.initialRobLsifo !== null ||
             reportInput.initialRobLsmgo !== undefined && reportInput.initialRobLsmgo !== null ||
@@ -319,7 +352,7 @@ function validateArrivalReport(reportInput: ArrivalSpecificData): void {
 }
 
 // Removed initialCargoStatus parameter
-function validateBerthReport(reportInput: BerthSpecificData): void {
+function validateBerthReport(reportInput: BerthSpecificData, vessel: Vessel): void {
     // 1. Validate mandatory Berth Navigation fields (including Berth Number)
     const navFields: Array<keyof BerthSpecificData> = [
         'berthDate', 'berthTime', 'berthNumber', // Added berthNumber
@@ -367,7 +400,6 @@ function validateBerthReport(reportInput: BerthSpecificData): void {
      // ME Params and Engine Units are optional in BaseReportData now and not applicable to Berth.
      // Removed call to validateMachineryInput for Berth reports.
 }
-
 
 function validateMachineryInput(reportInput: CreateReportDTO): void {
      // Machinery Validation (Common to applicable reports like Departure, Noon, Arrival)

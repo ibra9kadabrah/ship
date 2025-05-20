@@ -555,11 +555,126 @@ export const arrivalAnchorNoonChecklistItems: ChecklistItem[] = [
   }
 ];
 
+export const berthChecklistItems: ChecklistItem[] = [
+  // General Info (from BaseReportData)
+  {
+    id: 'berth_general_info',
+    label: 'General Report Information',
+    fields_affected: ['reportDate', 'reportTime', 'timeZone'],
+    reportType: 'berth',
+    category: 'General'
+  },
+  // Berth Details (from BerthFormData)
+  {
+    id: 'berth_location_details',
+    label: 'Berth Location & Time',
+    fields_affected: [
+      'berthDate', 'berthTime',
+      'berthLatDeg', 'berthLatMin', 'berthLatDir',
+      'berthLonDeg', 'berthLonMin', 'berthLonDir',
+      'berthNumber'
+    ],
+    reportType: 'berth',
+    category: 'Navigation'
+  },
+  // Cargo Operations (from BerthFormData)
+  {
+    id: 'berth_cargo_ops_quantities',
+    label: 'Cargo Operations - Quantities',
+    fields_affected: ['cargoLoaded', 'cargoUnloaded'],
+    reportType: 'berth',
+    category: 'Cargo Operations'
+  },
+  {
+    id: 'berth_cargo_ops_datetime',
+    label: 'Cargo Operations - Dates & Times',
+    fields_affected: ['cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime'],
+    reportType: 'berth',
+    category: 'Cargo Operations'
+  },
+  // Weather (from BaseReportData - granular, less critical but available)
+  {
+    id: 'berth_weather_wind',
+    label: 'Weather - Wind',
+    fields_affected: ['windDirection', 'windForce'],
+    reportType: 'berth',
+    category: 'Weather'
+  },
+  {
+    id: 'berth_weather_sea',
+    label: 'Weather - Sea State', // Sea direction less relevant at berth
+    fields_affected: ['seaState'], // Sea direction might be omitted or made optional
+    reportType: 'berth',
+    category: 'Weather'
+  },
+  {
+    id: 'berth_weather_swell',
+    label: 'Weather - Swell',
+    fields_affected: ['swellHeight'], // Swell direction less relevant
+    reportType: 'berth',
+    category: 'Weather'
+  },
+  // Bunker Consumptions (Focus on Boiler & Aux)
+  // ME Consumptions are part of BaseReportData but should be non-editable or explicitly stated as N/A for Berth.
+  // The form logic should handle this.
+  {
+    id: 'berth_bunker_me_cons',
+    label: 'Bunker - ME Consumptions (Verify N/A or Zero)',
+    fields_affected: ['meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil'],
+    reportType: 'berth',
+    category: 'Bunker Consumptions (ME - N/A)' // Special category to indicate non-applicability
+  },
+  {
+    id: 'berth_bunker_boiler_cons',
+    label: 'Bunker - Boiler Consumptions',
+    fields_affected: ['boilerConsumptionLsifo', 'boilerConsumptionLsmgo'],
+    reportType: 'berth',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'berth_bunker_aux_cons',
+    label: 'Bunker - Aux Consumptions',
+    fields_affected: ['auxConsumptionLsifo', 'auxConsumptionLsmgo'],
+    reportType: 'berth',
+    category: 'Bunker Consumptions'
+  },
+  // Bunker Supplies (from BaseReportData)
+  {
+    id: 'berth_bunker_supplies',
+    label: 'Bunker - Supplies',
+    fields_affected: ['supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil'],
+    reportType: 'berth',
+    category: 'Bunker Supplies'
+  },
+  // Machinery Aux Engines (from BaseReportData, as engineUnits is excluded in BerthFormData)
+  {
+    id: 'berth_machinery_aux_engines',
+    label: 'Machinery - Aux Engines Data',
+    fields_affected: ['auxEngines'],
+    reportType: 'berth',
+    category: 'Machinery Aux'
+  },
+  // ME Params - Mark as N/A or non-editable
+  {
+    id: 'berth_machinery_me_params',
+    label: 'Machinery - ME Parameters (Verify N/A)',
+    fields_affected: [
+        'meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp',
+        'meScavengeAirTemp', 'meThrustBearingTemp', 'meTcRpm1', 'meTcRpm2',
+        'meTcExhaustTempIn', 'meTcExhaustTempOut', 'meDailyRunHours',
+        'mePresentRpm', 'meCurrentSpeed'
+    ],
+    reportType: 'berth',
+    category: 'Machinery ME (N/A)'
+  }
+  // Engine Units are not part of BerthFormData, so no checklist item for it.
+];
+
 export const CHECKLIST_ITEMS_BY_REPORT_TYPE: Record<ReportType, ChecklistItem[]> = {
   'departure': departureChecklistItems,
   'noon': noonChecklistItems,
   'arrival': arrivalChecklistItems,
-  'berth': [], // Placeholder for berth checklist items
+  'berth': berthChecklistItems,
   'arrival_anchor_noon': arrivalAnchorNoonChecklistItems,
 };
 

@@ -6,7 +6,7 @@ import DepartureForm from '../components/forms/DepartureForm';
 import NoonForm from '../components/forms/NoonForm';
 // Import other form components as they become available for modification
 import ArrivalForm from '../components/forms/ArrivalForm'; // Uncommented
-// import BerthForm from '../components/forms/BerthForm';
+import BerthForm from '../components/forms/BerthForm'; // Uncommented
 import ArrivalAnchorNoonForm from '../components/forms/ArrivalAnchorNoonForm'; // Uncommented
 
 const ReportModificationPage: React.FC = () => {
@@ -23,6 +23,10 @@ const ReportModificationPage: React.FC = () => {
         try {
           const data = await getReportById(reportId);
           setReportData(data);
+          console.log("Report data fetched for modification:", data); // Log all fetched data
+          if (data.modification_checklist) {
+            console.log("Office requested changes for items (checklist IDs):", data.modification_checklist);
+          }
         } catch (err: any) {
           console.error("Error fetching report for modification:", err);
           setError(err.response?.data?.error || "Failed to load report data.");
@@ -62,8 +66,13 @@ const ReportModificationPage: React.FC = () => {
         return <ArrivalAnchorNoonForm reportIdToModify={reportId} />;
       case 'arrival': // Uncommented
         return <ArrivalForm reportIdToModify={reportId} />; // Uncommented
-      // case 'berth':
-      //   return <BerthForm reportIdToModify={reportId} />;
+      case 'berth':
+        return <BerthForm
+                  reportIdToModify={reportId}
+                  initialData={reportData} // Pass the full initial data
+                  activeModificationChecklistFromPage={reportData.modification_checklist || []}
+                  officeChangesCommentFromPage={reportData.requested_changes_comment || null}
+                />;
       default:
         return <p>Unsupported report type for modification: {reportData.reportType}</p>;
     }
