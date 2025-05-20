@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import reportRoutes from './routes/report.routes';
 import voyageRoutes from './routes/voyage.routes'; // Add import for voyage routes
+import debugRoutes from './routes/debug.routes'; // Add import for debug routes
 
 
 import vesselRoutes from './routes/vessel.routes';
@@ -28,6 +29,7 @@ app.use('/api/vessels', vesselRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/voyages', voyageRoutes); // Mount voyage routes
+app.use('/api/debug', debugRoutes); // Mount debug routes
 
 
 // Admin URL handler

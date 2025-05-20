@@ -36,12 +36,8 @@ const ReportReviewPage: React.FC = () => {
         // Call the actual API function
         const fetchedReport = await getReportById(reportId);
         setReportDetails(fetchedReport);
-        if (fetchedReport.reportType === 'departure') {
-          setCurrentChecklist(departureChecklistItems); // Initially load departure checklist
-        } else {
-          // Later, use getChecklistForReportType(fetchedReport.reportType) when other types are supported
-          setCurrentChecklist([]);
-        }
+        // Use the generic function to get the checklist for the current report type
+        setCurrentChecklist(getChecklistForReportType(fetchedReport.reportType));
       } catch (err: any) {
         console.error(`Error fetching report ${reportId}:`, err);
         setError(err.response?.data?.message || `Failed to load report details for ID: ${reportId}.`);
@@ -382,8 +378,8 @@ const ReportReviewPage: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
            <h2 className="text-xl font-semibold mb-4">Review Action</h2>
            
-           {/* Checklist for 'Changes Requested' - only for Departure reports initially */}
-           {reportDetails.reportType === 'departure' && (
+           {/* Checklist for 'Changes Requested' - show if a checklist is available for the report type */}
+           {currentChecklist.length > 0 && (
             <div className="mb-6">
               <h3 className="text-lg font-medium text-gray-700 mb-2">Request Modifications (Check items to allow captain to edit):</h3>
               <div className="space-y-2 max-h-60 overflow-y-auto border p-3 rounded">
@@ -449,8 +445,8 @@ const ReportReviewPage: React.FC = () => {
             >
                {isSubmitting ? 'Submitting...' : 'Reject'}
             </button>
-            {/* "Request Changes" button - only for Departure reports initially */}
-            {reportDetails.reportType === 'departure' && (
+            {/* "Request Changes" button - show if a checklist is available */}
+            {currentChecklist.length > 0 && (
               <button
                 onClick={() => handleReviewSubmit('changes_requested')}
                 disabled={isSubmitting || selectedChecklistItems.length === 0} // Disable if no checklist items selected

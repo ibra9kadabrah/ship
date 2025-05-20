@@ -18,6 +18,7 @@ import OfficeLayout from './layouts/OfficeLayout';
 import OfficeDashboardPage from './pages/OfficeDashboardPage'; // Renamed conceptually to OfficeHistoryPage
 import PendingReportsPage from './pages/PendingReportsPage'; // Import the new pending reports page
 import ReportReviewPage from './pages/ReportReviewPage';
+import ReportModificationPage from './pages/ReportModificationPage'; // Import the new modification page
 
 // Removed CaptainDashboardPlaceholder
 
@@ -46,7 +47,7 @@ function App() {
               <Route path="forms/arrival" element={<ArrivalForm />} /> {/* Add Arrival route */}
               <Route path="forms/arrival-anchor-noon" element={<ArrivalAnchorNoonForm />} /> {/* Add Arrival Anchor Noon route */}
               <Route path="forms/berth" element={<BerthForm />} /> {/* Add Berth route */}
-              <Route path="modify-report/:reportId" element={<DepartureFormWrapper />} /> {/* Route for modifying a report */}
+              <Route path="modify-report/:reportId" element={<ReportModificationPage />} /> {/* Updated route */}
               {/* Add other nested captain routes here if needed */}
             </Route>
           </Route>
@@ -67,12 +68,6 @@ function App() {
     </AuthProvider>
   );
 }
-
-// Wrapper component to extract reportId from params and pass to DepartureForm
-const DepartureFormWrapper: React.FC = () => {
-  const { reportId } = useParams<{ reportId: string }>();
-  return <DepartureForm reportIdToModify={reportId} />;
-};
 
 // Helper component for default redirection
 const DefaultRedirect: React.FC = () => {

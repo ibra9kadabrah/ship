@@ -169,12 +169,155 @@ export const departureChecklistItems: ChecklistItem[] = [
   },
 ];
 
+export const noonChecklistItems: ChecklistItem[] = [
+  // General Info
+  {
+    id: 'noon_general_info',
+    label: 'Noon Report Date/Time/Zone',
+    fields_affected: ['reportDate', 'reportTime', 'timeZone'],
+    reportType: 'noon',
+    category: 'General'
+  },
+  // Noon Position & Course
+  {
+    id: 'noon_position_course',
+    label: 'Noon Position & Course',
+    fields_affected: ['noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse'],
+    reportType: 'noon',
+    category: 'Navigation'
+  },
+  // Passage State
+  {
+    id: 'noon_passage_state',
+    label: 'Passage State (Noon/SOSP/ROSP)',
+    fields_affected: ['passageState'],
+    reportType: 'noon',
+    category: 'Navigation'
+  },
+  // SOSP Details (conditional on passageState)
+  {
+    id: 'noon_sosp_details',
+    label: 'SOSP Details (Date, Time, Position, Course)',
+    fields_affected: ['sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse'],
+    reportType: 'noon',
+    category: 'Navigation'
+  },
+  // ROSP Details (conditional on passageState)
+  {
+    id: 'noon_rosp_details',
+    label: 'ROSP Details (Date, Time, Position, Course)',
+    fields_affected: ['rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse'],
+    reportType: 'noon',
+    category: 'Navigation'
+  },
+  // Performance & Distance
+  {
+    id: 'noon_performance_distance',
+    label: 'Performance - Distance Since Last Report',
+    fields_affected: ['distanceSinceLastReport'],
+    reportType: 'noon',
+    category: 'Performance'
+  },
+  // Weather (same as departure)
+  {
+    id: 'noon_weather_wind',
+    label: 'Weather - Wind (Direction/Force)',
+    fields_affected: ['windDirection', 'windForce'],
+    reportType: 'noon',
+    category: 'Weather'
+  },
+  {
+    id: 'noon_weather_sea',
+    label: 'Weather - Sea (Direction/State)',
+    fields_affected: ['seaDirection', 'seaState'],
+    reportType: 'noon',
+    category: 'Weather'
+  },
+  {
+    id: 'noon_weather_swell',
+    label: 'Weather - Swell (Direction/Height)',
+    fields_affected: ['swellDirection', 'swellHeight'],
+    reportType: 'noon',
+    category: 'Weather'
+  },
+  // Bunker Consumptions (same as departure)
+  {
+    id: 'noon_bunker_me_cons',
+    label: 'Bunker - ME Consumptions',
+    fields_affected: ['meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil'],
+    reportType: 'noon',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'noon_bunker_boiler_cons',
+    label: 'Bunker - Boiler Consumptions',
+    fields_affected: ['boilerConsumptionLsifo', 'boilerConsumptionLsmgo'],
+    reportType: 'noon',
+    category: 'Bunker Consumptions'
+  },
+  {
+    id: 'noon_bunker_aux_cons',
+    label: 'Bunker - Aux Consumptions',
+    fields_affected: ['auxConsumptionLsifo', 'auxConsumptionLsmgo'],
+    reportType: 'noon',
+    category: 'Bunker Consumptions'
+  },
+  // Bunker Supplies (same as departure)
+  {
+    id: 'noon_bunker_supplies',
+    label: 'Bunker - Supplies (All Types)',
+    fields_affected: ['supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil'],
+    reportType: 'noon',
+    category: 'Bunker Supplies'
+  },
+  // Machinery ME Params (same as departure)
+  {
+    id: 'noon_machinery_me_press_temp',
+    label: 'Machinery - ME Pressures & Temperatures',
+    fields_affected: ['meFoPressure', 'meLubOilPressure', 'meFwInletTemp', 'meLoInletTemp', 'meScavengeAirTemp', 'meThrustBearingTemp'],
+    reportType: 'noon',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'noon_machinery_me_tc',
+    label: 'Machinery - ME Turbocharger Params',
+    fields_affected: ['meTcRpm1', 'meTcRpm2', 'meTcExhaustTempIn', 'meTcExhaustTempOut'],
+    reportType: 'noon',
+    category: 'Machinery ME'
+  },
+  {
+    id: 'noon_machinery_me_run_perf',
+    label: 'Machinery - ME Running Hours & Performance',
+    fields_affected: ['meDailyRunHours', 'mePresentRpm', 'meCurrentSpeed'],
+    reportType: 'noon',
+    category: 'Machinery ME'
+  },
+  // Machinery Engine Units (same as departure)
+  {
+    id: 'noon_machinery_engine_units',
+    label: 'Machinery - Engine Units Data',
+    fields_affected: ['engineUnits'],
+    reportType: 'noon',
+    category: 'Machinery Units'
+  },
+  // Machinery Aux Engines (same as departure)
+  {
+    id: 'noon_machinery_aux_engines',
+    label: 'Machinery - Aux Engines Data',
+    fields_affected: ['auxEngines'],
+    reportType: 'noon',
+    category: 'Machinery Aux'
+  },
+];
+
 // Example: How to get checklist for a specific report type
 export function getChecklistForReportType(reportType: ReportType): ChecklistItem[] {
   switch (reportType) {
     case 'departure':
       return departureChecklistItems;
-    // Add cases for 'noon', 'arrival', etc. as they are defined
+    case 'noon':
+      return noonChecklistItems;
+    // Add cases for 'arrival', etc. as they are defined
     default:
       return [];
   }

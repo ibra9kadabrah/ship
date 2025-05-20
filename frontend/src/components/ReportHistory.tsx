@@ -104,7 +104,7 @@ const ReportHistory: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    {report.status === 'changes_requested' && report.reportType === 'departure' && (
+                    {report.status === 'changes_requested' && (
                       <Link
                         to={`/captain/modify-report/${report.id}`}
                         className="text-indigo-600 hover:text-indigo-900"

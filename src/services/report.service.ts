@@ -383,8 +383,9 @@ export const ReportService = {
             faspCourse: reportInput.reportType === 'departure' ? reportInput.faspCourse : null,
             harbourDistance: (reportInput.reportType === 'departure' || reportInput.reportType === 'arrival') ? reportInput.harbourDistance : null,
             harbourTime: (reportInput.reportType === 'departure' || reportInput.reportType === 'arrival') ? reportInput.harbourTime : null,
-            distanceSinceLastReport: null, // This input field is not stored directly
-            windDirection: reportInput.windDirection ?? null, 
+            distanceSinceLastReport: (reportInput.reportType === 'noon' || reportInput.reportType === 'arrival' || reportInput.reportType === 'arrival_anchor_noon') && 'distanceSinceLastReport' in reportInput ?
+                reportInput.distanceSinceLastReport : null, // Store the actual value
+            windDirection: reportInput.windDirection ?? null,
             seaDirection: reportInput.seaDirection ?? null, 
             swellDirection: reportInput.swellDirection ?? null,
             windForce: reportInput.windForce ?? null,
@@ -584,6 +585,7 @@ export const ReportService = {
 
         const fullReport: FullReportViewDTO = {
             ...(reportBase as Report), // Cast needed as findById returns Partial<Report>
+            
             engineUnits: engineUnits || [], // Ensure arrays exist
             auxEngines: auxEngines || [], // Ensure arrays exist
             vesselName: vessel?.name ?? 'Unknown Vessel',
@@ -598,7 +600,10 @@ export const ReportService = {
             voyageCargoStatus: (departureReport?.reportType === 'departure' ? departureReport.cargoStatus : null)
                                ?? (reportBase.reportType === 'departure' ? reportBase.cargoStatus : null)
                                ?? null,
-            // Add the new fields
+           // Add debug logging safely to avoid type errors
+           ...(console.log("Report service reportBase keys:", Object.keys(reportBase)), {}),
+           ...(console.log("Report service distanceSinceLastReport value:", (reportBase as any).distanceSinceLastReport), {}),
+           // Add the new fields
             modification_checklist: parsedChecklist,
             requested_changes_comment: (reportBase as any).requested_changes_comment || null,
         };
