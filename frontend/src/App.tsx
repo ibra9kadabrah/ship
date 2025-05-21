@@ -48,6 +48,7 @@ function App() {
               <Route path="forms/arrival-anchor-noon" element={<ArrivalAnchorNoonForm />} /> {/* Add Arrival Anchor Noon route */}
               <Route path="forms/berth" element={<BerthForm />} /> {/* Add Berth route */}
               <Route path="modify-report/:reportId" element={<ReportModificationPage />} /> {/* Updated route */}
+              <Route path="view-report/:reportId" element={<ReportReviewPage />} /> {/* Added route for viewing approved reports */}
               {/* Add other nested captain routes here if needed */}
             </Route>
           </Route>

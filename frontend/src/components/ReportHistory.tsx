@@ -112,7 +112,14 @@ const ReportHistory: React.FC = () => {
                         Modify Report
                       </Link>
                     )}
-                    {/* Placeholder for other actions like 'View Details' if needed */}
+                    {report.status === 'approved' && (
+                      <Link
+                        to={`/captain/view-report/${report.id}`}
+                        className="text-blue-600 hover:text-blue-900 ml-4" // Added ml-4 for spacing if other actions exist
+                      >
+                        View Report
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}
