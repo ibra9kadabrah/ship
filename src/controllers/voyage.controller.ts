@@ -9,7 +9,7 @@ import VoyageService from '../services/voyage.service'; // Import the new servic
 
 export const getCurrentVoyageDetails = async (req: Request, res: Response, next: NextFunction) => {
     // req.user is added by the authenticate middleware
-    const userId = req.user?.id; 
+    const userId = req.user?.id;
 
     if (!userId) {
         // This should technically be caught by the authenticate middleware, but good practice
@@ -29,14 +29,36 @@ export const getCurrentVoyageDetails = async (req: Request, res: Response, next:
             return res.status(404).json({ message: 'No active voyage found for this vessel.' });
         }
 
-        // 3. Find the approved Departure report associated with this active voyage
-        // An active voyage should be initiated by an approved departure report.
-        const departureReport = await ReportModel.findLatestApprovedDepartureReport(vessel.id);
-
-        // Check if this departure report actually belongs to the identified activeVoyage
-        if (!departureReport || departureReport.voyageId !== activeVoyage.id || departureReport.reportType !== 'departure') {
-            console.error(`Inconsistent state: Active voyage ${activeVoyage.id} for vessel ${vessel.id} does not have a valid, approved departure report linked to it. Found departure report ID: ${departureReport?.id}, linked to voyage: ${departureReport?.voyageId}, type: ${departureReport?.reportType}`);
-            return res.status(500).json({ message: 'Internal server error: Could not retrieve initial voyage details due to inconsistent voyage/report state.' });
+        // 3. Try to find the approved Departure report for this specific active voyage
+        let departureReport = await ReportModel.findApprovedDepartureReportByVoyageId(activeVoyage.id);
+        
+        // If no approved departure report for this voyage, check if there's a pending one
+        if (!departureReport) {
+            const pendingDepartureReport = await ReportModel.findPendingDepartureReportByVoyageId(activeVoyage.id);
+            
+            if (pendingDepartureReport) {
+                // We have a pending departure report for this voyage
+                // Return a response indicating the voyage is in "pending approval" state
+                return res.status(200).json({
+                    voyageState: 'DEPARTURE_PENDING_APPROVAL',
+                    vesselName: vessel.name,
+                    vesselImoNumber: vessel.imoNumber,
+                    vesselType: vessel.type,
+                    vesselDeadweight: vessel.deadweight,
+                    voyageId: activeVoyage.id,
+                    departurePort: activeVoyage.departurePort,
+                    destinationPort: activeVoyage.destinationPort,
+                    voyageDistance: activeVoyage.voyageDistance,
+                    pendingReportId: pendingDepartureReport.id,
+                    message: 'Departure report is pending approval. Please wait for office approval or modify if changes were requested.'
+                });
+            }
+            
+            // If no departure report at all for this voyage, this is truly an inconsistent state
+            console.error(`Inconsistent state: Active voyage ${activeVoyage.id} for vessel ${vessel.id} has no departure report (approved or pending).`);
+            return res.status(500).json({
+                message: 'Internal server error: Active voyage has no associated departure report.'
+            });
         }
 
         // 4. Fetch the latest approved report for progress data (can be any type)
@@ -46,26 +68,26 @@ export const getCurrentVoyageDetails = async (req: Request, res: Response, next:
         const voyageDetails = {
             vesselName: vessel.name,
             vesselImoNumber: vessel.imoNumber,
-            vesselType: vessel.type, // Added vessel type
+            vesselType: vessel.type,
             vesselDeadweight: vessel.deadweight,
             voyageId: activeVoyage.id,
             departurePort: activeVoyage.departurePort,
             destinationPort: activeVoyage.destinationPort,
-            voyageDistance: activeVoyage.voyageDistance, // Add total voyage distance
-            actualDepartureDate: (departureReport as any).reportDate, // Add ATD Date
-            actualDepartureTime: (departureReport as any).reportTime, // Add ATD Time
-            etaDate: (departureReport as any).etaDate, // Get ETA from Departure Report
-            etaTime: (departureReport as any).etaTime, // Get ETA from Departure Report
+            voyageDistance: activeVoyage.voyageDistance,
+            actualDepartureDate: (departureReport as any).reportDate,
+            actualDepartureTime: (departureReport as any).reportTime,
+            etaDate: (departureReport as any).etaDate,
+            etaTime: (departureReport as any).etaTime,
             initialCargoStatus: (departureReport as any).cargoStatus,
             totalDistanceTravelled: latestApprovedReport?.totalDistanceTravelled ?? 0,
-            distanceToGo: latestApprovedReport?.distanceToGo ?? activeVoyage.voyageDistance, // Default to full distance if no progress
+            distanceToGo: latestApprovedReport?.distanceToGo ?? activeVoyage.voyageDistance,
         };
 
         res.status(200).json(voyageDetails);
 
     } catch (error) {
         console.error('Error fetching current voyage details:', error);
-        next(error); // Pass error to the global error handler
+        next(error);
     }
 };
 

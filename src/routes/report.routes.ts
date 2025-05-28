@@ -1,6 +1,7 @@
 // src/routes/report.routes.ts
 import { Router } from 'express';
 import ReportController from '../controllers/report.controller';
+import { ReportModificationController } from '../controllers/report_modification.controller';
 import { authenticate, authorizeAdmin, authorizeOffice, authorizeCaptain } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -22,5 +23,10 @@ router.get('/', authenticate, authorizeOffice, ReportController.getAllReports); 
 
 // Admin/Office route to export MRV Excel
 router.get('/:voyageId/export-mrv-excel', authenticate, authorizeOffice, ReportController.exportMRVExcel);
+
+// Office Report Modification Routes
+// The '/reports' prefix is handled by how this router is mounted in app.ts
+router.post('/:reportId/preview-cascade', authenticate, authorizeOffice, ReportModificationController.previewCascade);
+router.post('/:reportId/modify-cascade', authenticate, authorizeOffice, ReportModificationController.modifyWithCascade);
 
 export default router;

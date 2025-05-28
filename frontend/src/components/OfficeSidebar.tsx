@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { MailQuestion, LogOut, History } from 'lucide-react'; // Import History icon
+import { MailQuestion, LogOut, History, Edit3 } from 'lucide-react'; // Import History and Edit3 icons
 import { useAuth } from '../contexts/AuthContext'; // For logout
 import { useNavigate } from 'react-router-dom';
 
@@ -51,6 +51,17 @@ const OfficeSidebar: React.FC = () => {
             >
               <History size={18} className="mr-3" />
               Complete History
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/office/report-management"
+              className={({ isActive }) =>
+                `${baseLinkClasses} ${isActive ? activeLinkClasses : inactiveLinkClasses}`
+              }
+            >
+              <Edit3 size={18} className="mr-3" />
+              Report Management
             </NavLink>
           </li>
         </ul>

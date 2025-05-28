@@ -30,7 +30,7 @@ export function calculateDistances(input: DistanceCalculationInput): DistanceCal
     let distanceToGo: number | undefined = undefined;
     const distSinceLast = input.distanceSinceLastReport ?? 0;
 
-    if (input.reportType === 'departure' || input.reportType === 'noon' || input.reportType === 'arrival') {
+    if (input.reportType === 'departure' || input.reportType === 'noon' || input.reportType === 'arrival' || input.reportType === 'arrival_anchor_noon') {
         if (input.reportType === 'departure') {
             // For departure, total travelled is simply the harbour distance.
             totalDistanceTravelled = input.harbourDistance ?? 0;

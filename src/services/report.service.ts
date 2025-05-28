@@ -872,8 +872,9 @@ export const ReportService = {
         console.log(`[Service.resubmitReport] Called for reportId: ${reportId} by captainId: ${captainId}`);
         console.log(`[Service.resubmitReport] Incoming 'changes' payload:`, JSON.stringify(changes, null, 2));
 
-        const transaction = db.transaction(() => {
+        const transaction = db.transaction(async () => { // Made transaction async
             const report = ReportModel.findById(reportId);
+            console.log('[Service.resubmitReport] Report fetched for resubmission:', JSON.stringify(report, null, 2));
             if (!report) {
                 throw new Error(`Report with ID ${reportId} not found.`);
             }
@@ -883,6 +884,70 @@ export const ReportService = {
             if (report.status !== 'changes_requested') {
                 throw new Error(`Report ${reportId} is not in 'changes_requested' status. Current status: ${report.status}.`);
             }
+
+            // Step 1: Determine Previous ROBs
+            // This is crucial for recalculating ROBs if consumption values changed.
+            // Since this is a departure report, the "previous ROBs" are the final ROBs of the preceding voyage.
+            let previousRobForCalc: PreviousRob = { lsifo: 0, lsmgo: 0, cylOil: 0, meOil: 0, aeOil: 0 };
+            if (report.vesselId) { // Ensure vesselId exists on the report
+                const previousVoyageFinalState = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(report.vesselId);
+                if (previousVoyageFinalState) {
+                    previousRobForCalc = {
+                        lsifo: previousVoyageFinalState.finalRobLsifo ?? 0,
+                        lsmgo: previousVoyageFinalState.finalRobLsmgo ?? 0,
+                        cylOil: previousVoyageFinalState.finalRobCylOil ?? 0,
+                        meOil: previousVoyageFinalState.finalRobMeOil ?? 0,
+                        aeOil: previousVoyageFinalState.finalRobAeOil ?? 0,
+                    };
+                    console.log(`[Service.resubmitReport] Previous ROBs for calculation from voyage ${previousVoyageFinalState.voyageId}:`, JSON.stringify(previousRobForCalc, null, 2));
+                } else {
+                    // This case implies it might be the first voyage, or data issue.
+                    // If it's the first voyage, initial ROBs should have been on the original report.
+                    // We'll use the 'initialRob*' fields from the current report as the base if no previous voyage state.
+                    // These should ideally not change during a resubmit unless explicitly part of 'changes'.
+                    previousRobForCalc = {
+                        lsifo: report.initialRobLsifo ?? 0,
+                        lsmgo: report.initialRobLsmgo ?? 0,
+                        cylOil: report.initialRobCylOil ?? 0,
+                        meOil: report.initialRobMeOil ?? 0,
+                        aeOil: report.initialRobAeOil ?? 0,
+                    };
+                    console.log(`[Service.resubmitReport] No previous completed voyage state found. Using initial ROBs from current report as base for calculation:`, JSON.stringify(previousRobForCalc, null, 2));
+                }
+            } else {
+                throw new Error("Vessel ID is missing from the report, cannot determine previous ROBs.");
+            }
+
+            // Step 2: Construct Full Consumption Data from report and changes
+            const mergedConsumptionData: BunkerConsumptionInput = {
+                meConsumptionLsifo: changes.meConsumptionLsifo ?? report.meConsumptionLsifo ?? 0,
+                meConsumptionLsmgo: changes.meConsumptionLsmgo ?? report.meConsumptionLsmgo ?? 0,
+                meConsumptionCylOil: changes.meConsumptionCylOil ?? report.meConsumptionCylOil ?? 0,
+                meConsumptionMeOil: changes.meConsumptionMeOil ?? report.meConsumptionMeOil ?? 0,
+                meConsumptionAeOil: changes.meConsumptionAeOil ?? report.meConsumptionAeOil ?? 0,
+                boilerConsumptionLsifo: changes.boilerConsumptionLsifo ?? report.boilerConsumptionLsifo ?? 0,
+                boilerConsumptionLsmgo: changes.boilerConsumptionLsmgo ?? report.boilerConsumptionLsmgo ?? 0,
+                auxConsumptionLsifo: changes.auxConsumptionLsifo ?? report.auxConsumptionLsifo ?? 0,
+                auxConsumptionLsmgo: changes.auxConsumptionLsmgo ?? report.auxConsumptionLsmgo ?? 0,
+            };
+            console.log(`[Service.resubmitReport] Merged consumption data for recalculation:`, JSON.stringify(mergedConsumptionData, null, 2));
+
+            // Step 3: Recalculate Total Consumptions
+            const recalculatedTotalConsumptions = calculateTotalConsumptions(mergedConsumptionData);
+            console.log(`[Service.resubmitReport] Recalculated total consumptions:`, JSON.stringify(recalculatedTotalConsumptions, null, 2));
+
+            // Step 4: Construct Full Supply Data and Recalculate Current ROBs
+            const mergedSupplyData: BunkerSupplyInput = {
+                supplyLsifo: changes.supplyLsifo ?? report.supplyLsifo ?? 0,
+                supplyLsmgo: changes.supplyLsmgo ?? report.supplyLsmgo ?? 0,
+                supplyCylOil: changes.supplyCylOil ?? report.supplyCylOil ?? 0,
+                supplyMeOil: changes.supplyMeOil ?? report.supplyMeOil ?? 0,
+                supplyAeOil: changes.supplyAeOil ?? report.supplyAeOil ?? 0,
+            };
+            console.log(`[Service.resubmitReport] Merged supply data for recalculation:`, JSON.stringify(mergedSupplyData, null, 2));
+
+            const recalculatedCurrentRobs = calculateCurrentRobs(previousRobForCalc, recalculatedTotalConsumptions, mergedSupplyData);
+            console.log(`[Service.resubmitReport] Recalculated current ROBs:`, JSON.stringify(recalculatedCurrentRobs, null, 2));
 
             // Prepare data for update. Only update fields present in `changes`.
             // We need to be careful about how engineUnits and auxEngines are handled.
@@ -957,6 +1022,18 @@ export const ReportService = {
             updateData.modification_checklist = null; // Clear the checklist
             updateData.requested_changes_comment = null; // Clear office comment
             updateData.updatedAt = new Date().toISOString();
+
+            // Add recalculated consumptions and ROBs to updateData
+            updateData.totalConsumptionLsifo = recalculatedTotalConsumptions.totalConsumptionLsifo;
+            updateData.totalConsumptionLsmgo = recalculatedTotalConsumptions.totalConsumptionLsmgo;
+            updateData.totalConsumptionCylOil = recalculatedTotalConsumptions.totalConsumptionCylOil;
+            updateData.totalConsumptionMeOil = recalculatedTotalConsumptions.totalConsumptionMeOil;
+            updateData.totalConsumptionAeOil = recalculatedTotalConsumptions.totalConsumptionAeOil;
+            updateData.currentRobLsifo = recalculatedCurrentRobs.currentRobLsifo;
+            updateData.currentRobLsmgo = recalculatedCurrentRobs.currentRobLsmgo;
+            updateData.currentRobCylOil = recalculatedCurrentRobs.currentRobCylOil;
+            updateData.currentRobMeOil = recalculatedCurrentRobs.currentRobMeOil;
+            updateData.currentRobAeOil = recalculatedCurrentRobs.currentRobAeOil;
             
             console.log(`[Service.resubmitReport] 'updateData' being passed to ReportModel.update:`, JSON.stringify(updateData, null, 2));
 
@@ -978,6 +1055,7 @@ export const ReportService = {
             // plus the status and review fields.
 
             const success = ReportModel.update(reportId, updateData);
+            console.log('[Service.resubmitReport] Result of ReportModel.update():', success);
             if (!success) {
                 throw new Error(`Failed to update report ${reportId} during resubmission.`);
             }
@@ -985,7 +1063,7 @@ export const ReportService = {
         });
 
         try {
-            const updatedReportId = transaction();
+            const updatedReportId = await transaction(); // Await the async transaction
             return this.getReportById(updatedReportId); // Fetch and return the full, updated report
         } catch (error) {
             console.error(`Report resubmission transaction failed for report ${reportId}:`, error);

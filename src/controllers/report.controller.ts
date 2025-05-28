@@ -109,6 +109,7 @@ export const ReportController = {
 
   // Resubmit report with changes (captain only)
   async resubmitReport(req: Request, res: Response): Promise<void> {
+    console.log(`[Controller.resubmitReport] Called for reportId: ${req.params.id}. Body:`, JSON.stringify(req.body, null, 2));
     try {
       const { id: reportId } = req.params;
       const captainId = req.user!.id; // Authenticated captain

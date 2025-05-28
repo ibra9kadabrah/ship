@@ -494,6 +494,30 @@ export const ReportModel = {
     return report || null;
   },
 
+  // Find approved departure report for a specific voyage
+  findApprovedDepartureReportByVoyageId(voyageId: string): Report | null {
+    const stmt = db.prepare(`
+        SELECT * FROM reports
+        WHERE voyageId = ? AND reportType = 'departure' AND status = 'approved'
+        ORDER BY createdAt DESC
+        LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Report | undefined;
+    return report || null;
+  },
+
+  // Find pending departure report for a specific voyage
+  findPendingDepartureReportByVoyageId(voyageId: string): Report | null {
+    const stmt = db.prepare(`
+        SELECT * FROM reports
+        WHERE voyageId = ? AND reportType = 'departure' AND status IN ('pending', 'changes_requested')
+        ORDER BY createdAt DESC
+        LIMIT 1
+    `);
+    const report = stmt.get(voyageId) as Report | undefined;
+    return report || null;
+  },
+
   // Get latest *approved* 'Arrival' or 'Berth' report for a vessel
   getLatestApprovedArrivalOrBerthReport(vesselId: string): Partial<Report> | null {
     const stmt = db.prepare(`

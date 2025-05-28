@@ -145,4 +145,26 @@ export const getCarryOverCargoDetails = async (vesselId: string): Promise<CarryO
   }
 };
 
+export const reportModificationApi = {
+  previewCascade: async (reportId: string, modifications: any[]) => { // Use 'any' for modifications for now
+    const token = localStorage.getItem('token'); // Assuming token is stored as 'token'
+    const response = await apiClient.post(`/reports/${reportId}/preview-cascade`, { modifications });
+    // Axios handles JSON parsing and basic error throwing for non-2xx responses
+    return response.data;
+  },
+
+  modifyWithCascade: async (reportId: string, modifications: any[]) => { // Use 'any' for modifications for now
+    const token = localStorage.getItem('token');
+    const response = await apiClient.post(`/reports/${reportId}/modify-cascade`, { modifications });
+    return response.data;
+  },
+
+  getApprovedReports: async (vesselId?: string): Promise<any[]> => {
+    const token = localStorage.getItem('token');
+    const url = vesselId ? `/reports?status=approved&vesselId=${vesselId}` : '/reports?status=approved';
+    
+    const response = await apiClient.get(url);
+    return response.data.reports || response.data; // Assuming API returns { reports: [] } or just []
+  }
+};
 export default apiClient;

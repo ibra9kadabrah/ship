@@ -2,6 +2,10 @@
 import { Request, Response } from 'express';
 import db from '../db/connection';
 import debugUtils from './debug-utils';
+import ReportModel from '../models/report.model'; // Added
+import VoyageModel from '../models/voyage.model'; // Added
+import { calculateDistances, DistanceCalculationInput } from '../services/distance_calculator'; // Added
+import { ReportType } from '../types/report'; // Added
 
 export const DebugController = {
   // Debug endpoint to check distance values directly from the database
@@ -68,6 +72,69 @@ export const DebugController = {
     } catch (error) {
       console.error('Error checking table schema:', error);
       res.status(500).json({ error: 'Failed to check table schema' });
+    }
+  },
+
+  async recalculateSingleReportDistances(req: Request, res: Response): Promise<void> {
+    const { reportId } = req.params;
+    if (!reportId) {
+      res.status(400).json({ error: 'Report ID is required.' });
+      return;
+    }
+
+    try {
+      const reportToFix = ReportModel.findById(reportId);
+      if (!reportToFix) {
+        res.status(404).json({ error: `Report with ID ${reportId} not found.` });
+        return;
+      }
+
+      if (!reportToFix.vesselId || !reportToFix.voyageId) {
+        res.status(400).json({ error: `Report ${reportId} is missing vesselId or voyageId.` });
+        return;
+      }
+
+      const previousReport = ReportModel.findPreviousReport(reportId, reportToFix.vesselId);
+      const voyage = VoyageModel.findById(reportToFix.voyageId);
+
+      if (!voyage) {
+        res.status(404).json({ error: `Voyage with ID ${reportToFix.voyageId} not found for report ${reportId}.` });
+        return;
+      }
+
+      const distanceInput: DistanceCalculationInput = {
+        reportType: reportToFix.reportType as ReportType,
+        harbourDistance: (reportToFix as any).harbourDistance ?? null,
+        distanceSinceLastReport: (reportToFix as any).distanceSinceLastReport ?? null,
+        previousReportData: previousReport,
+        voyageDistance: voyage.voyageDistance,
+      };
+
+      const recalculatedDistances = calculateDistances(distanceInput);
+
+      const updateSuccess = ReportModel.update(reportId, {
+        totalDistanceTravelled: recalculatedDistances.totalDistanceTravelled,
+        distanceToGo: recalculatedDistances.distanceToGo,
+        // ReportModel.update will handle updatedAt automatically
+      });
+
+      if (updateSuccess) {
+        const updatedReport = ReportModel.findById(reportId);
+        res.status(200).json({
+          message: `Distances recalculated for report ${reportId}.`,
+          originalReport: reportToFix, // Show original for comparison if needed
+          recalculatedDistances,
+          updatedReportValues: {
+            totalDistanceTravelled: updatedReport?.totalDistanceTravelled,
+            distanceToGo: updatedReport?.distanceToGo,
+          }
+        });
+      } else {
+        res.status(500).json({ error: `Failed to update report ${reportId} with new distances.` });
+      }
+    } catch (error) {
+      console.error(`Error recalculating distances for report ${reportId}:`, error);
+      res.status(500).json({ error: `Failed to recalculate distances for report ${reportId}.` });
     }
   }
 };

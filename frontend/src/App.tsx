@@ -19,6 +19,7 @@ import OfficeDashboardPage from './pages/OfficeDashboardPage'; // Renamed concep
 import PendingReportsPage from './pages/PendingReportsPage'; // Import the new pending reports page
 import ReportReviewPage from './pages/ReportReviewPage';
 import ReportModificationPage from './pages/ReportModificationPage'; // Import the new modification page
+import { OfficeReportManagementPage } from './pages/OfficeReportManagementPage'; // Import the new office report management page
 
 // Removed CaptainDashboardPlaceholder
 
@@ -59,6 +60,7 @@ function App() {
               <Route index element={<PendingReportsPage />} /> {/* Index shows pending reports */}
               <Route path="history" element={<OfficeDashboardPage />} /> {/* New route for complete history */}
               <Route path="review/:reportId" element={<ReportReviewPage />} /> {/* Report review detail */}
+              <Route path="report-management" element={<OfficeReportManagementPage />} /> {/* New route for office report management */}
             </Route>
           </Route>
 
