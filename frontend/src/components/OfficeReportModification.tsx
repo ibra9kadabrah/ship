@@ -3,33 +3,39 @@ import React, { useState } from 'react';
 import { reportModificationApi } from '../services/api';
 import { ReportType } from '../types/report'; // Import ReportType
 
-// Interfaces (can be moved to a types file)
-interface FieldModification {
+// Interfaces
+interface FieldModification { // User's direct input change
   fieldName: string;
   oldValue: any;
   newValue: any;
 }
 
-interface CascadeResult {
+interface FieldChange { // A specific change in an affected report
+  oldValue: any;
+  newValue: any;
+}
+
+interface AffectedReport { // Data for one affected report from backend
+  reportId: string;
+  reportType: ReportType; // Added reportType to match backend
+  changes: Record<string, FieldChange>; 
+  finalState: Record<string, any>; 
+  errors: string[];
+}
+
+interface CascadeResult { // Overall result from backend preview/apply
   isValid: boolean;
   affectedReports: AffectedReport[];
   errors: string[];
 }
 
-interface AffectedReport {
-  reportId: string;
-  updates: Record<string, any>;
-  errors: string[];
-}
-
 interface OfficeReportModificationProps {
   reportId: string;
-  reportData: any; // Should be FullReportViewDTO or similar, includes reportType
+  reportData: any; 
   onClose: () => void;
   onSuccess: () => void;
 }
 
-// Define which fields are considered critical and editable
 const EDITABLE_CRITICAL_FIELDS = Object.values({
   'Distance': ['distanceSinceLastReport', 'harbourDistance', 'voyageDistance', 'totalDistanceTravelled', 'distanceToGo'],
   'Bunker Consumption': ['meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil', 'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo', 'totalConsumptionLsifo', 'totalConsumptionLsmgo', 'totalConsumptionCylOil', 'totalConsumptionMeOil', 'totalConsumptionAeOil'],
@@ -38,72 +44,13 @@ const EDITABLE_CRITICAL_FIELDS = Object.values({
   'Port & Voyage': ['departurePort', 'destinationPort', 'voyageNumber']
 }).flat();
 
-// Define fields relevant to each report type for display
-// This needs to be comprehensive for each report type.
 const REPORT_TYPE_DISPLAY_FIELDS: Record<ReportType, string[]> = {
-  departure: [
-    'reportDate', 'reportTime', 'timeZone', 'departurePort', 'destinationPort', 'voyageNumber', 'voyageDistance',
-    'fwdDraft', 'aftDraft', 'cargoQuantity', 'cargoType', 'cargoStatus',
-    'faspDate', 'faspTime', 'faspLatDeg', 'faspLatMin', 'faspLatDir', 'faspLonDeg', 'faspLonMin', 'faspLonDir', 'faspCourse',
-    'harbourDistance', 'distanceSinceLastReport', // Editable
-    // Bunkers (editable ones are in EDITABLE_CRITICAL_FIELDS)
-    'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil',
-    'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo',
-    'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil',
-    'initialRobLsifo', 'initialRobLsmgo', 'initialRobCylOil', 'initialRobMeOil', 'initialRobAeOil', // Usually not editable after first submission
-    'currentRobLsifo', 'currentRobLsmgo', 'currentRobCylOil', 'currentRobMeOil', 'currentRobAeOil', // Calculated, but shown
-    'totalConsumptionLsifo', 'totalConsumptionLsmgo', 'totalConsumptionCylOil', 'totalConsumptionMeOil', 'totalConsumptionAeOil', // Calculated
-    // Add other relevant departure fields
-  ],
-  noon: [
-    'reportDate', 'reportTime', 'timeZone', 'passageState',
-    'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse',
-    'sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse',
-    'rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse',
-    'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', // Editable ones
-    'avgSpeedVoyage', 'sailingTimeVoyage',
-    // Bunkers
-    'meConsumptionLsifo', 'meConsumptionLsmgo', /* ... other critical bunker fields ... */
-    'currentRobLsifo', 'currentRobLsmgo', /* ... other ROB fields ... */
-    // Add other relevant noon fields
-  ],
-  arrival: [
-    'reportDate', 'reportTime', 'timeZone',
-    'eospDate', 'eospTime', 'eospLatDeg', 'eospLatMin', 'eospLatDir', 'eospLonDeg', 'eospLonMin', 'eospLonDir', 'eospCourse',
-    'estimatedBerthingDate', 'estimatedBerthingTime',
-    'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', // Editable ones
-    // Bunkers
-    'meConsumptionLsifo', 'meConsumptionLsmgo', /* ... other critical bunker fields ... */
-    'currentRobLsifo', 'currentRobLsmgo', /* ... other ROB fields ... */
-    // Add other relevant arrival fields
-  ],
-  berth: [
-    'reportDate', 'reportTime', 'timeZone',
-    'berthDate', 'berthTime', 'berthLatDeg', 'berthLatMin', 'berthLatDir', 'berthLonDeg', 'berthLonMin', 'berthLonDir', 'berthNumber',
-    'cargoLoaded', 'cargoUnloaded', 'cargoQuantity', 'cargoStatus', // Editable ones
-    'cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime',
-    // Bunkers
-    'supplyLsifo', 'supplyLsmgo', /* ... other critical supply fields ... */
-    'currentRobLsifo', 'currentRobLsmgo', /* ... other ROB fields ... */
-    // Add other relevant berth fields
-  ],
-  arrival_anchor_noon: [ // Combine relevant fields from arrival and noon, plus anchor specific
-    'reportDate', 'reportTime', 'timeZone', 'passageState', // Noon part
-    'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse', // Noon part
-    // Anchor specific parts (assuming these exist in FullReportViewDTO for this type)
-    // 'anchorDropDate', 'anchorDropTime', 'anchorDropLat', 'anchorDropLon',
-    // 'anchorAweighDate', 'anchorAweighTime', 'anchorAweighLat', 'anchorAweighLon',
-    'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo',
-    // Bunkers
-    'meConsumptionLsifo', 'meConsumptionLsmgo', /* ... */
-    'currentRobLsifo', 'currentRobLsmgo', /* ... */
-    // Add other relevant fields
-  ],
-  // Ensure all ReportType values from frontend/src/types/report.ts are covered.
-  // Removed 'departure_final', 'bunker_supply', 'engine_ops' as they are not in ReportType.
-  // If new report types are added to ReportType, they should be added here too.
+  departure: ['reportDate', 'reportTime', 'timeZone', 'departurePort', 'destinationPort', 'voyageNumber', 'voyageDistance', 'fwdDraft', 'aftDraft', 'cargoQuantity', 'cargoType', 'cargoStatus', 'faspDate', 'faspTime', 'faspLatDeg', 'faspLatMin', 'faspLatDir', 'faspLonDeg', 'faspLonMin', 'faspLonDir', 'faspCourse', 'harbourDistance', 'distanceSinceLastReport', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil', 'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo', 'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil', 'initialRobLsifo', 'initialRobLsmgo', 'initialRobCylOil', 'initialRobMeOil', 'initialRobAeOil', 'currentRobLsifo', 'currentRobLsmgo', 'currentRobCylOil', 'currentRobMeOil', 'currentRobAeOil', 'totalConsumptionLsifo', 'totalConsumptionLsmgo', 'totalConsumptionCylOil', 'totalConsumptionMeOil', 'totalConsumptionAeOil'],
+  noon: ['reportDate', 'reportTime', 'timeZone', 'passageState', 'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse', 'sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse', 'rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse', 'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', 'avgSpeedVoyage', 'sailingTimeVoyage', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'currentRobLsifo', 'currentRobLsmgo'],
+  arrival: ['reportDate', 'reportTime', 'timeZone', 'eospDate', 'eospTime', 'eospLatDeg', 'eospLatMin', 'eospLatDir', 'eospLonDeg', 'eospLonMin', 'eospLonDir', 'eospCourse', 'estimatedBerthingDate', 'estimatedBerthingTime', 'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'currentRobLsifo', 'currentRobLsmgo'],
+  berth: ['reportDate', 'reportTime', 'timeZone', 'berthDate', 'berthTime', 'berthLatDeg', 'berthLatMin', 'berthLatDir', 'berthLonDeg', 'berthLonMin', 'berthLonDir', 'berthNumber', 'cargoLoaded', 'cargoUnloaded', 'cargoQuantity', 'cargoStatus', 'cargoOpsStartDate', 'cargoOpsStartTime', 'cargoOpsEndDate', 'cargoOpsEndTime', 'supplyLsifo', 'supplyLsmgo', 'currentRobLsifo', 'currentRobLsmgo'],
+  arrival_anchor_noon: ['reportDate', 'reportTime', 'timeZone', 'passageState', 'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse', 'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'currentRobLsifo', 'currentRobLsmgo'],
 };
-
 
 export const OfficeReportModification: React.FC<OfficeReportModificationProps> = ({
   reportId,
@@ -120,7 +67,6 @@ export const OfficeReportModification: React.FC<OfficeReportModificationProps> =
   const handleFieldChange = (fieldName: string, newValue: any) => {
     const oldValue = reportData[fieldName];
     const filteredMods = modifications.filter(m => m.fieldName !== fieldName);
-    
     if (String(oldValue) !== String(newValue)) {
       setModifications([...filteredMods, { fieldName, oldValue, newValue }]);
     } else {
@@ -173,10 +119,8 @@ export const OfficeReportModification: React.FC<OfficeReportModificationProps> =
   const currentReportType = reportData.reportType as ReportType;
   const fieldsToDisplay = REPORT_TYPE_DISPLAY_FIELDS[currentReportType] || Object.keys(reportData).filter(key => typeof reportData[key] !== 'object' || reportData[key] === null);
 
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      {/* Increased max-width for a wider modal */}
       <div className="bg-white rounded-lg p-6 md:p-8 max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center mb-6 pb-4 border-b">
           <h2 className="text-2xl font-semibold text-gray-800">Modify Report (ID: {reportId})</h2>
@@ -192,17 +136,11 @@ export const OfficeReportModification: React.FC<OfficeReportModificationProps> =
 
         <div className="mb-6">
           <h3 className="font-semibold text-gray-700 mb-4">Report Fields (Editable fields are critical)</h3>
-          {/* Use a more spacious grid layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
             {fieldsToDisplay.map((key) => {
               const value = reportData[key];
-              // Skip complex objects/arrays for this simple display, or handle them specifically
-              if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                return null; 
-              }
-              if (Array.isArray(value)) {
-                return null;
-              }
+              if (typeof value === 'object' && value !== null && !Array.isArray(value)) return null;
+              if (Array.isArray(value)) return null;
 
               const isEditable = EDITABLE_CRITICAL_FIELDS.includes(key);
               if (isEditable) {
@@ -301,15 +239,13 @@ const FieldEditor: React.FC<FieldEditorProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const targetValue = e.target.value;
     setValue(targetValue); 
-
     const isNumericField = typeof currentValue === 'number' || 
                            ['quantity', 'distance', 'consumption', 'supply', 'rob', 'deg', 'min', 'course', 'draft', 'force', 'height', 'temp', 'pressure', 'rpm', 'hours', 'speed']
                            .some(keyword => fieldName.toLowerCase().includes(keyword));
-                           
     let processedValue: string | number | null = targetValue;
     if (isNumericField) {
       if (targetValue === '') {
-        processedValue = null; // Represent empty numeric input as null
+        processedValue = null; 
       } else {
         const num = parseFloat(targetValue);
         processedValue = isNaN(num) ? targetValue : num; 
@@ -379,10 +315,10 @@ const CascadePreviewDisplay: React.FC<CascadePreviewDisplayProps> = ({
         
         {cascadeResult.errors.length > 0 && (
           <div className="mt-2">
-            <p className="text-sm font-medium text-red-700">Errors:</p>
+            <p className="text-sm font-medium text-red-700">Overall Errors:</p>
             <ul className="text-sm text-red-600 list-disc list-inside pl-2">
               {cascadeResult.errors.map((error, index) => (
-                <li key={index}>{error}</li>
+                <li key={`overall-error-${index}`}>{error}</li>
               ))}
             </ul>
           </div>
@@ -394,30 +330,34 @@ const CascadePreviewDisplay: React.FC<CascadePreviewDisplayProps> = ({
           <h5 className="font-medium text-gray-600 mb-2">
             Affected Reports ({cascadeResult.affectedReports.length})
           </h5>
-          <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+          <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
             {cascadeResult.affectedReports.map((report, index) => (
-              <div key={index} className="border border-gray-200 rounded-md p-3 text-sm">
+              <div key={`affected-${report.reportId}-${index}`} className="border border-gray-200 rounded-md p-3 text-sm">
                 <div className="font-medium text-gray-700 mb-1">Report ID: {report.reportId}</div>
+                <div className="text-xs text-gray-500 mb-2 capitalize">Type: {report.reportType ? report.reportType.replace('_', ' ') : 'N/A'}</div>
                 
-                {Object.keys(report.updates).length > 0 && (
-                  <div>
-                    <p className="font-medium text-gray-500 text-xs mb-1">Updated Fields:</p>
-                    <ul className="list-disc list-inside pl-3 text-xs text-gray-600">
-                    {Object.entries(report.updates).map(([field, value]) => (
+                {Object.keys(report.changes).length > 0 ? (
+                  <div className="mb-2">
+                    <p className="font-semibold text-blue-600 text-xs mb-1">Fields Changed (Old Value → New Value):</p>
+                    <ul className="list-disc list-inside pl-4 text-xs text-gray-700 space-y-0.5">
+                    {Object.entries(report.changes).map(([field, change]) => (
                       <li key={field}>
-                        {field}: {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                        <span className="font-medium">{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</span> 
+                        <span className="text-gray-500">{String(change.oldValue === null || change.oldValue === undefined ? 'N/A' : change.oldValue)}</span> &rarr; <span className="text-green-700 font-semibold">{String(change.newValue === null || change.newValue === undefined ? 'N/A' : change.newValue)}</span>
                       </li>
                     ))}
                     </ul>
                   </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic mb-2">No direct field values changed in this report due to this specific cascade step.</p>
                 )}
                 
                 {report.errors.length > 0 && (
-                  <div className="mt-1">
+                  <div className="mt-2">
                     <p className="font-medium text-red-600 text-xs mb-1">Errors for this report:</p>
-                    <ul className="list-disc list-inside pl-3 text-xs text-red-500">
+                    <ul className="list-disc list-inside pl-4 text-xs text-red-500 space-y-0.5">
                     {report.errors.map((error, errorIndex) => (
-                      <li key={errorIndex}>{error}</li>
+                      <li key={`report-error-${errorIndex}`}>{error}</li>
                     ))}
                     </ul>
                   </div>

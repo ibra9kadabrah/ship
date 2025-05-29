@@ -1,6 +1,6 @@
 // src/controllers/report.controller.ts
 import { Request, Response } from 'express';
-import { ReportService } from '../services/report.service'; // Import the service
+import { ReportService } from '../services/report'; // Import the service facade
 import { ExcelExportService } from '../services/excel_export.service'; // Import ExcelExportService
 import VoyageModel from '../models/voyage.model'; // Import VoyageModel
 import VesselModel from '../models/vessel.model'; // Import VesselModel

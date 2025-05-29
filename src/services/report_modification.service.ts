@@ -1,6 +1,6 @@
 // src/services/report_modification.service.ts
 import ReportModel from '../models/report.model';
-import { CascadeCalculatorService, FieldModification, CascadeResult } from './cascade_calculator.service';
+import { CascadeCalculatorService, FieldModification, CascadeResult, AffectedReport } from './cascade_calculator.service'; // Import AffectedReport
 
 export const ReportModificationService = {
   async modifyReportWithCascade(
@@ -35,10 +35,13 @@ export const ReportModificationService = {
     }
 
     for (const affectedReport of cascadeResult.affectedReports) {
-      if (Object.keys(affectedReport.updates).length > 0) {
-        const updateSuccess = ReportModel.update(affectedReport.reportId, affectedReport.updates);
+      // Use finalState which contains all recalculated fields for the update
+      if (Object.keys(affectedReport.finalState).length > 0) { 
+        const updateSuccess = ReportModel.update(affectedReport.reportId, affectedReport.finalState);
         if (!updateSuccess) {
           console.error(`Failed to update report ${affectedReport.reportId}`);
+          // Consider if this should halt the process or collect errors
+          // For now, it continues and reports overall success based on sourceUpdateSuccess and cascadeResult.isValid
         }
       }
     }
