@@ -69,9 +69,6 @@ const ReportModificationPage: React.FC = () => {
       case 'berth':
         return <BerthForm
                   reportIdToModify={reportId}
-                  initialData={reportData} // Pass the full initial data
-                  activeModificationChecklistFromPage={reportData.modification_checklist || []}
-                  officeChangesCommentFromPage={reportData.requested_changes_comment || null}
                 />;
       default:
         return <p>Unsupported report type for modification: {reportData.reportType}</p>;
