@@ -24,12 +24,12 @@ const Sidebar: React.FC<SidebarProps> = ({ voyageState }) => {
 
   // Helper functions to determine link enabled status
   // Disable all if a report is pending
-  const isDepartureEnabled = !isReportPending && (voyageState === 'NO_VOYAGE_ACTIVE' || voyageState === 'ARRIVED' || voyageState === 'BERTHED'); // Enable on ARRIVED and BERTHED too
+  const isDepartureEnabled = !isReportPending && (voyageState === 'NO_VOYAGE_ACTIVE' || voyageState === 'ARRIVED' || voyageState === 'AT_ANCHOR' || voyageState === 'BERTHED');
   const isNoonEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA');
   // Corrected Arrival logic: Should only be enabled AT_SEA or DEPARTED (if first noon is skipped)
-  const isArrivalEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA'); 
-  const isArrivalAnchorNoonEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'AT_SEA'); // Enable after arrival or if at sea (at anchor)
-  const isBerthEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'BERTHED');
+  const isArrivalEnabled = !isReportPending && (voyageState === 'DEPARTED' || voyageState === 'AT_SEA');
+  const isArrivalAnchorNoonEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'AT_ANCHOR' || voyageState === 'AT_SEA'); // AT_SEA might cover AT_ANCHOR if not explicitly set
+  const isBerthEnabled = !isReportPending && (voyageState === 'ARRIVED' || voyageState === 'AT_ANCHOR' || voyageState === 'BERTHED');
   // --- End Updated Logic ---
 
   // Function to get combined classes for a link

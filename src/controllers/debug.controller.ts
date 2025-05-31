@@ -1,142 +1,164 @@
-// src/controllers/debug.controller.ts
 import { Request, Response } from 'express';
-import db from '../db/connection';
-import debugUtils from './debug-utils';
-import ReportModel from '../models/report.model'; // Added
-import VoyageModel from '../models/voyage.model'; // Added
-import { calculateDistances, DistanceCalculationInput } from '../services/distance_calculator'; // Added
-import { ReportType } from '../types/report'; // Added
+import { ExcelDataAggregationService } from '../services/excel_data_aggregation.service';
+import ReportModel from '../models/report.model';
+import VoyageModel from '../models/voyage.model';
+import VesselModel from '../models/vessel.model';
 
 export const DebugController = {
-  // Debug endpoint to check distance values directly from the database
-  async checkDistanceValues(req: Request, res: Response): Promise<void> {
+  // Existing debug endpoints...
+  
+  async getExcelDebugData(req: Request, res: Response): Promise<void> {
     try {
-      // Query all noon reports to check their distanceSinceLastReport values
-      const reports = db.prepare(`
-        SELECT id, reportType, reportDate, distanceSinceLastReport
-        FROM reports
-        WHERE reportType = 'noon'
-        ORDER BY reportDate DESC
-      `).all();
+      const { voyageId } = req.params;
       
-      res.status(200).json({
-        message: 'Distance values retrieved',
-        count: reports.length,
-        reports
-      });
-    } catch (error) {
-      console.error('Error fetching distance values:', error);
-      res.status(500).json({ error: 'Failed to fetch distance values' });
-    }
-  },
-
-  // Debug endpoint to fix distance values in existing reports
-  async fixDistanceValues(req: Request, res: Response): Promise<void> {
-    try {
-      // Call the utility function to update the reports
-      const result = debugUtils.updateNoonReportDistances();
-      
-      if (result.success) {
-        res.status(200).json({
-          message: 'Distance values updated successfully',
-          result
-        });
-      } else {
-        res.status(500).json({
-          error: 'Failed to update distance values',
-          details: result.error
-        });
-      }
-    } catch (error) {
-      console.error('Error updating distance values:', error);
-      res.status(500).json({ error: 'Failed to update distance values' });
-    }
-  },
-
-  // Debug endpoint to check the table schema
-  async checkTableSchema(req: Request, res: Response): Promise<void> {
-    try {
-      // Query the table info to see if the column exists
-      const tableInfo = db.prepare(`PRAGMA table_info(reports)`).all();
-      
-      // Check if distanceSinceLastReport column exists
-      const hasDistanceColumn = tableInfo.some((column: any) =>
-        column.name === 'distanceSinceLastReport'
-      );
-      
-      res.status(200).json({
-        message: 'Table schema retrieved',
-        hasDistanceColumn,
-        schema: tableInfo
-      });
-    } catch (error) {
-      console.error('Error checking table schema:', error);
-      res.status(500).json({ error: 'Failed to check table schema' });
-    }
-  },
-
-  async recalculateSingleReportDistances(req: Request, res: Response): Promise<void> {
-    const { reportId } = req.params;
-    if (!reportId) {
-      res.status(400).json({ error: 'Report ID is required.' });
-      return;
-    }
-
-    try {
-      const reportToFix = ReportModel.findById(reportId);
-      if (!reportToFix) {
-        res.status(404).json({ error: `Report with ID ${reportId} not found.` });
+      if (!voyageId) {
+        res.status(400).json({ error: 'Voyage ID is required' });
         return;
       }
 
-      if (!reportToFix.vesselId || !reportToFix.voyageId) {
-        res.status(400).json({ error: `Report ${reportId} is missing vesselId or voyageId.` });
-        return;
-      }
-
-      const previousReport = ReportModel.findPreviousReport(reportId, reportToFix.vesselId);
-      const voyage = VoyageModel.findById(reportToFix.voyageId);
-
+      console.log(`[DebugController] Fetching Excel debug data for voyage: ${voyageId}`);
+      
+      // Get voyage details
+      const voyage = VoyageModel.findById(voyageId);
       if (!voyage) {
-        res.status(404).json({ error: `Voyage with ID ${reportToFix.voyageId} not found for report ${reportId}.` });
+        res.status(404).json({ error: `Voyage ${voyageId} not found` });
         return;
       }
-
-      const distanceInput: DistanceCalculationInput = {
-        reportType: reportToFix.reportType as ReportType,
-        harbourDistance: (reportToFix as any).harbourDistance ?? null,
-        distanceSinceLastReport: (reportToFix as any).distanceSinceLastReport ?? null,
-        previousReportData: previousReport,
-        voyageDistance: voyage.voyageDistance,
-      };
-
-      const recalculatedDistances = calculateDistances(distanceInput);
-
-      const updateSuccess = ReportModel.update(reportId, {
-        totalDistanceTravelled: recalculatedDistances.totalDistanceTravelled,
-        distanceToGo: recalculatedDistances.distanceToGo,
-        // ReportModel.update will handle updatedAt automatically
-      });
-
-      if (updateSuccess) {
-        const updatedReport = ReportModel.findById(reportId);
-        res.status(200).json({
-          message: `Distances recalculated for report ${reportId}.`,
-          originalReport: reportToFix, // Show original for comparison if needed
-          recalculatedDistances,
-          updatedReportValues: {
-            totalDistanceTravelled: updatedReport?.totalDistanceTravelled,
-            distanceToGo: updatedReport?.distanceToGo,
-          }
-        });
-      } else {
-        res.status(500).json({ error: `Failed to update report ${reportId} with new distances.` });
+      
+      // Get vessel details
+      const vessel = VesselModel.findById(voyage.vesselId);
+      if (!vessel) {
+        res.status(404).json({ error: `Vessel ${voyage.vesselId} not found` });
+        return;
       }
+      
+      // Get all reports for the voyage
+      const allReports = ReportModel._getAllReportsForVoyage(voyageId);
+      const approvedReports = allReports.filter(r => r.status === 'approved');
+      
+      // Sort reports chronologically
+      const sortedReports = approvedReports.sort((a, b) => {
+        const dateA = new Date(`${a.reportDate}T${a.reportTime || '00:00:00'}`).getTime();
+        const dateB = new Date(`${b.reportDate}T${b.reportTime || '00:00:00'}`).getTime();
+        return dateA - dateB;
+      });
+      
+      // Get the last report (should have cumulative values)
+      const lastReport = sortedReports[sortedReports.length - 1];
+      
+      // Debug info for each report
+      const reportDebugInfo = sortedReports.map(report => ({
+        id: report.id,
+        type: report.reportType,
+        date: report.reportDate,
+        time: report.reportTime,
+        status: report.status,
+        meDailyRunHours: report.meDailyRunHours,
+        distanceSinceLastReport: (report as any).distanceSinceLastReport || null,
+        totalDistanceTravelled: report.totalDistanceTravelled,
+        sailingTimeVoyage: report.sailingTimeVoyage,
+        avgSpeedVoyage: report.avgSpeedVoyage,
+        // Fuel consumption
+        totalConsumptionLsifo: report.totalConsumptionLsifo,
+        totalConsumptionLsmgo: report.totalConsumptionLsmgo,
+        // ROB values
+        currentRobLsifo: report.currentRobLsifo,
+        currentRobLsmgo: report.currentRobLsmgo,
+      }));
+      
+      // Try to aggregate data
+      let aggregatedData = null;
+      let aggregationError = null;
+      
+      try {
+        aggregatedData = await ExcelDataAggregationService.aggregateDataForExcel(voyageId);
+      } catch (error) {
+        aggregationError = error instanceof Error ? error.message : String(error);
+      }
+      
+      // Get next voyage departure report
+      let nextVoyageDepartureInfo = null;
+      try {
+        const { VoyageLifecycleService } = await import('../services/voyage_lifecycle.service');
+        // Pass voyage.id as the currentVoyageId
+        const nextDepartureReport = await VoyageLifecycleService.getNextVoyageDepartureReport(
+          vessel.id,
+          voyage.id, // Pass the ID of the current voyage (Voyage N)
+          voyage.startDate
+        );
+        
+        if (nextDepartureReport) {
+          nextVoyageDepartureInfo = {
+            id: nextDepartureReport.id,
+            voyageId: nextDepartureReport.voyageId,
+            date: nextDepartureReport.reportDate,
+            time: nextDepartureReport.reportTime,
+            harbourDistance: nextDepartureReport.harbourDistance,
+            meDailyRunHours: nextDepartureReport.meDailyRunHours,
+            totalConsumptionLsifo: nextDepartureReport.totalConsumptionLsifo,
+            totalConsumptionLsmgo: nextDepartureReport.totalConsumptionLsmgo,
+            currentRobLsifo: nextDepartureReport.currentRobLsifo,
+            currentRobLsmgo: nextDepartureReport.currentRobLsmgo,
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching next voyage departure:', error);
+      }
+      
+      const debugResponse = {
+        voyage: {
+          id: voyage.id,
+          voyageNumber: voyage.voyageNumber,
+          vesselId: voyage.vesselId,
+          departurePort: voyage.departurePort,
+          destinationPort: voyage.destinationPort,
+          startDate: voyage.startDate,
+          endDate: voyage.endDate,
+          status: voyage.status,
+        },
+        vessel: {
+          id: vessel.id,
+          name: vessel.name,
+          imoNumber: vessel.imoNumber,
+          type: vessel.type,
+        },
+        reportsSummary: {
+          totalReports: allReports.length,
+          approvedReports: approvedReports.length,
+          reportTypes: approvedReports.map(r => r.reportType),
+        },
+        lastReport: lastReport ? {
+          id: lastReport.id,
+          type: lastReport.reportType,
+          date: lastReport.reportDate,
+          time: lastReport.reportTime,
+          sailingTimeVoyage: lastReport.sailingTimeVoyage,
+          totalDistanceTravelled: lastReport.totalDistanceTravelled,
+          avgSpeedVoyage: lastReport.avgSpeedVoyage,
+        } : null,
+        nextVoyageDeparture: nextVoyageDepartureInfo,
+        reports: reportDebugInfo,
+        aggregatedData: aggregatedData,
+        aggregationError: aggregationError,
+        calculatedTotals: {
+          voyageN_totalHours: lastReport?.sailingTimeVoyage || 0,
+          voyageN_totalDistance: lastReport?.totalDistanceTravelled || 0,
+          plus1_hours: nextVoyageDepartureInfo?.meDailyRunHours || 0,
+          plus1_distance: nextVoyageDepartureInfo?.harbourDistance || 0,
+          grandTotalHours: (lastReport?.sailingTimeVoyage || 0) + (nextVoyageDepartureInfo?.meDailyRunHours || 0),
+          grandTotalDistance: (lastReport?.totalDistanceTravelled || 0) + (nextVoyageDepartureInfo?.harbourDistance || 0),
+          calculatedAvgSpeed: ((lastReport?.totalDistanceTravelled || 0) + (nextVoyageDepartureInfo?.harbourDistance || 0)) / 
+                              ((lastReport?.sailingTimeVoyage || 0) + (nextVoyageDepartureInfo?.meDailyRunHours || 0)) || 0,
+        }
+      };
+      
+      res.json(debugResponse);
     } catch (error) {
-      console.error(`Error recalculating distances for report ${reportId}:`, error);
-      res.status(500).json({ error: `Failed to recalculate distances for report ${reportId}.` });
+      console.error('[DebugController] Error in getExcelDebugData:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch Excel debug data',
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 };
-
-export default DebugController;

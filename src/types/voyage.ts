@@ -37,5 +37,6 @@ export type VoyageState =
   | 'DEPARTED'         // After Departure, before first Noon/Arrival
   | 'AT_SEA'           // After first Noon, before Arrival
   | 'ARRIVED'          // After Arrival, before first Berth
+  | 'AT_ANCHOR'        // After Arrival Anchor Noon, before Berth or new Departure
   | 'BERTHED'          // After first Berth, before next Departure
   | 'REPORT_PENDING';  // If the latest report is pending review

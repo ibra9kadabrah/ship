@@ -67,6 +67,7 @@ interface PreviousVoyageFinalStateData {
   cargoQuantity: number | null; cargoType: string | null; cargoStatus: CargoStatus | null;
   finalRobLsifo: number | null; finalRobLsmgo: number | null; finalRobCylOil: number | null;
   finalRobMeOil: number | null; finalRobAeOil: number | null; message?: string;
+  lastPortOfCall?: string | null; // Added to match backend
 }
 
 // Define the initial state for the form data
@@ -162,21 +163,33 @@ const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify: reportI
   }, [isModifyMode, initialReportData]);
 
   useEffect(() => {
-    if (!isModifyMode && previousVoyageStateData && !previousVoyageStateData.message) {
+    if (!isModifyMode) {
       const updates: Partial<DepartureFormData> = {};
-      if (previousVoyageStateData.cargoType !== null) updates.cargoType = previousVoyageStateData.cargoType;
-      if (previousVoyageStateData.cargoQuantity !== null) updates.cargoQuantity = String(previousVoyageStateData.cargoQuantity);
-      if (previousVoyageStateData.cargoStatus !== null) updates.cargoStatus = previousVoyageStateData.cargoStatus;
-      if (previousVoyageStateData.finalRobLsifo !== null) updates.initialRobLsifo = String(previousVoyageStateData.finalRobLsifo);
-      if (previousVoyageStateData.finalRobLsmgo !== null) updates.initialRobLsmgo = String(previousVoyageStateData.finalRobLsmgo);
-      if (previousVoyageStateData.finalRobCylOil !== null) updates.initialRobCylOil = String(previousVoyageStateData.finalRobCylOil);
-      if (previousVoyageStateData.finalRobMeOil !== null) updates.initialRobMeOil = String(previousVoyageStateData.finalRobMeOil);
-      if (previousVoyageStateData.finalRobAeOil !== null) updates.initialRobAeOil = String(previousVoyageStateData.finalRobAeOil);
+      // Prioritize vesselInfo.lastDestinationPort for departure port
+      if (vesselInfo && vesselInfo.lastDestinationPort !== null && vesselInfo.lastDestinationPort !== undefined) {
+        updates.departurePort = vesselInfo.lastDestinationPort;
+      } else if (previousVoyageStateData && previousVoyageStateData.lastPortOfCall !== null && previousVoyageStateData.lastPortOfCall !== undefined) {
+        // Fallback to previousVoyageStateData if vesselInfo doesn't have it (should be rare)
+        updates.departurePort = previousVoyageStateData.lastPortOfCall;
+      }
+
+      // Pre-fill other fields from previousVoyageStateData if available
+      if (previousVoyageStateData && !previousVoyageStateData.message) {
+        if (previousVoyageStateData.cargoType !== null) updates.cargoType = previousVoyageStateData.cargoType;
+        if (previousVoyageStateData.cargoQuantity !== null) updates.cargoQuantity = String(previousVoyageStateData.cargoQuantity);
+        if (previousVoyageStateData.cargoStatus !== null) updates.cargoStatus = previousVoyageStateData.cargoStatus;
+        if (previousVoyageStateData.finalRobLsifo !== null) updates.initialRobLsifo = String(previousVoyageStateData.finalRobLsifo);
+        if (previousVoyageStateData.finalRobLsmgo !== null) updates.initialRobLsmgo = String(previousVoyageStateData.finalRobLsmgo);
+        if (previousVoyageStateData.finalRobCylOil !== null) updates.initialRobCylOil = String(previousVoyageStateData.finalRobCylOil);
+        if (previousVoyageStateData.finalRobMeOil !== null) updates.initialRobMeOil = String(previousVoyageStateData.finalRobMeOil);
+        if (previousVoyageStateData.finalRobAeOil !== null) updates.initialRobAeOil = String(previousVoyageStateData.finalRobAeOil);
+      }
+      
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({ ...prev, ...updates }));
       }
     }
-  }, [previousVoyageStateData, isModifyMode]);
+  }, [vesselInfo, previousVoyageStateData, isModifyMode]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -406,6 +419,8 @@ const DepartureForm: React.FC<DepartureFormProps> = ({ reportIdToModify: reportI
         handleChange={handleChange}
         isFieldEditable={isFieldEditable}
         isModifyMode={isModifyMode}
+        // Make read-only if not in modify mode AND vesselInfo.lastDestinationPort was provided
+        isDeparturePortReadOnly={!isModifyMode && vesselInfo?.lastDestinationPort !== null && vesselInfo?.lastDestinationPort !== undefined}
       />
       
       <DraftsCargoSection

@@ -11,6 +11,7 @@ interface VoyageDetailsSectionProps {
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   isFieldEditable?: (fieldName: string) => boolean;
   isModifyMode?: boolean;
+  isDeparturePortReadOnly?: boolean; // New prop
 }
 
 const VoyageDetailsSection: React.FC<VoyageDetailsSectionProps> = ({
@@ -18,6 +19,7 @@ const VoyageDetailsSection: React.FC<VoyageDetailsSectionProps> = ({
   handleChange,
   isFieldEditable = () => true,
   isModifyMode = false,
+  isDeparturePortReadOnly = false, // Default to false
 }) => {
   return (
     <fieldset className="border p-4 rounded">
@@ -34,9 +36,9 @@ const VoyageDetailsSection: React.FC<VoyageDetailsSectionProps> = ({
             value={formData.departurePort}
             onChange={handleChange}
             required
-            readOnly={isModifyMode && !isFieldEditable('departurePort')}
+            readOnly={isDeparturePortReadOnly || (isModifyMode && !isFieldEditable('departurePort'))}
             className={`mt-1 block w-full p-2 border border-gray-300 rounded shadow-sm ${
-              isModifyMode && !isFieldEditable('departurePort') ? 'bg-gray-100 cursor-not-allowed' : ''
+              (isDeparturePortReadOnly || (isModifyMode && !isFieldEditable('departurePort'))) ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
           />
         </div>

@@ -291,6 +291,7 @@ export type VoyageState =
   | 'DEPARTED'         // After Departure, before first Noon/Arrival
   | 'AT_SEA'           // After first Noon, before Arrival
   | 'ARRIVED'          // After Arrival, before first Berth
+  | 'AT_ANCHOR'        // After Arrival Anchor Noon, before Berth or new Departure
   | 'BERTHED'          // After first Berth, before next Departure
   | 'REPORT_PENDING'   // If the latest report is pending review
   | 'NO_VESSEL_ASSIGNED' // Captain has no vessel assigned
@@ -480,7 +481,8 @@ export interface FullReportViewDTO extends Report {
   voyageCargoQuantity: number | null;
   voyageCargoType: string | null;
   voyageCargoStatus: CargoStatus | null;
-  noonCourse?: number | null; 
+  voyageNumber?: string | null; // Added for displaying voyage number
+  noonCourse?: number | null;
   sospCourse?: number | null; // Added sospCourse
   rospCourse?: number | null; // Added rospCourse
   // Add calculated performance metrics to the view DTO as well

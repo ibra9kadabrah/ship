@@ -68,7 +68,9 @@ export const VoyageService = {
       case 'berth':
         // If the latest non-pending report is berth, the state is BERTHED.
         // This allows submitting another Berth report or starting a new Departure.
-        return 'BERTHED'; 
+        return 'BERTHED';
+      case 'arrival_anchor_noon':
+        return 'AT_ANCHOR'; // New state for when at anchor
       default:
         // Should not happen with valid ReportType
         console.warn(`Unexpected report type found for latest report: ${latestReport.reportType}`);

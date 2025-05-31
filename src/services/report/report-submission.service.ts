@@ -15,6 +15,7 @@ import {
     PassageState,
     // FullReportViewDTO // Not returned by submit
 } from '../../types/report';
+// ReportRecordData is imported from './helpers/report-builder'
 import { Voyage } from '../../types/voyage';
 import { Vessel } from '../../types/vessel';
 // import { User } from '../../types/user'; // CaptainId is string
@@ -81,9 +82,55 @@ export class ReportSubmissionService {
           depInput.cargoStatus = previousVoyageState.cargoStatus;
         }
       }
-      // Validate cargo quantity after potential defaulting
+
+      // --- START: Cargo Continuity Validation for Departure Reports ---
+      const absoluteLatestApprovedReportFromDb = ReportModel.getLatestApprovedReportForVessel(reportInput.vesselId);
+      
+      // Cast to a type that includes all potential DB fields for easier access
+      // ReportRecordData from report.model.ts is suitable here as it represents the flat DB structure.
+      // We need to import it or ensure Report type from ../types/report includes all these as optional.
+      // For now, assuming Report type from ../types/report.ts (imported as Report) has these as optional top-level fields
+      // as per its definition (lines 324-326 in the version I saw).
+      // If ReportModel returns Partial<Report>, and Report is the union, this is tricky.
+      
+      if (absoluteLatestApprovedReportFromDb) {
+        // Cast to ReportRecordData to access the flat DB structure fields
+        const latestReportRecord = absoluteLatestApprovedReportFromDb as ReportRecordData;
+
+        const depInput = reportInput as DepartureSpecificData;
+        const submittedCargoQuantity = depInput.cargoQuantity !== undefined ? Number(depInput.cargoQuantity) : null;
+        const submittedCargoType = depInput.cargoType;
+        const submittedCargoStatus = depInput.cargoStatus;
+
+        // Access fields from the ReportRecordData type
+        const lastKnownCargoQuantity = latestReportRecord.cargoQuantity ?? 0;
+        const lastKnownCargoType = latestReportRecord.cargoType ?? null;
+        const lastKnownCargoStatus = latestReportRecord.cargoStatus ?? 'Empty';
+
+        let mismatch = false;
+        if (submittedCargoQuantity === null || Math.abs(submittedCargoQuantity - lastKnownCargoQuantity) > 1e-5) { // Compare numbers with tolerance
+            mismatch = true;
+        }
+        if (submittedCargoType !== lastKnownCargoType) {
+            mismatch = true;
+        }
+        if (submittedCargoStatus !== lastKnownCargoStatus) {
+            mismatch = true;
+        }
+
+        if (mismatch) {
+          throw new Error(
+            `Cargo details mismatch. New Departure Report - Submitted: Qty=${submittedCargoQuantity ?? 'N/A'}, Type=${submittedCargoType ?? 'N/A'}, Status=${submittedCargoStatus ?? 'N/A'}. ` +
+            `Vessel's Last Known State: Qty=${lastKnownCargoQuantity}, Type=${lastKnownCargoType}, Status=${lastKnownCargoStatus}. ` +
+            `Ensure departure cargo details match the vessel's current state.`
+          );
+        }
+      }
+      // --- END: Cargo Continuity Validation ---
+
+      // Validate cargo quantity against DWT (already present, good)
       CargoCalculator.validateCargoAgainstVesselCapacity(
-        (reportInput as DepartureSpecificData).cargoQuantity ?? 0, // Use ?? 0 if it can be undefined
+        (reportInput as DepartureSpecificData).cargoQuantity ?? 0,
         vessel.deadweight,
         'departure'
       );
