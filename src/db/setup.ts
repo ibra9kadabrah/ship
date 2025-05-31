@@ -1,6 +1,8 @@
 import db from './connection';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 
-// Function to set up the database schema
+// Function to set up the database schema and seed initial data
 export function setupDatabase(): void {
   console.log('Setting up database schema...');
   
@@ -318,7 +320,27 @@ export function setupDatabase(): void {
     )
   `);
 
-  console.log('Database schema setup complete.');
+  // Seed initial admin user if not exists
+  try {
+    const adminUserExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+    if (!adminUserExists) {
+      console.log('Admin user not found, creating default admin...');
+      const adminId = uuidv4();
+      const hashedPassword = bcrypt.hashSync('ak-admin-123000', 10);
+      const now = new Date().toISOString();
+      db.prepare(
+        `INSERT INTO users (id, username, password, name, role, createdAt, updatedAt, isActive)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(adminId, 'admin', hashedPassword, 'Admin User', 'admin', now, now, 1);
+      console.log('Default admin user created successfully.');
+    } else {
+      console.log('Admin user already exists.');
+    }
+  } catch (error) {
+    console.error('Error seeding admin user:', error);
+  }
+
+  console.log('Database schema setup and initial data seeding complete.');
 }
 
 // Call this function to initialize the database
