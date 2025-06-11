@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import AddUserForm from '../components/AddUserForm'; // Import actual component
 import AddVesselForm from '../components/AddVesselForm'; // Import actual component
 import AdminReportHistory from '../components/AdminReportHistory'; // Import the new component
+import UserList from '../components/UserList';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -36,11 +37,13 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Add Office User</h2>
             <AddUserForm role="office" /> 
             {/* Use actual component */}
+            <UserList role="office" />
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Add Captain User</h2>
-            <AddUserForm role="captain" /> 
+            <AddUserForm role="captain" />
             {/* Use actual component */}
+            <UserList role="captain" />
           </div>
 
           {/* Add Vessel Form */}

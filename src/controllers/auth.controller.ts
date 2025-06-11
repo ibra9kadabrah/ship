@@ -112,6 +112,28 @@ export const AuthController = {
       console.error('Error fetching users by role:', error);
       res.status(500).json({ error: 'Failed to fetch users by role' });
     }
+  },
+
+  // Delete a user (admin only)
+  deleteUser(req: Request, res: Response): void {
+    try {
+      const { id } = req.params;
+
+      // Check if user exists
+      const existingUser = UserModel.findById(id);
+      if (!existingUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      // Delete the user
+      UserModel.delete(id);
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
   }
 };
 

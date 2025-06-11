@@ -167,4 +167,28 @@ export const reportModificationApi = {
     return response.data.reports || response.data; // Assuming API returns { reports: [] } or just []
   }
 };
+import { User, UserRole } from '../types/user';
+
+/**
+ * Fetches users by their role.
+ * @param role - The role of the users to fetch.
+ */
+const getUsersByRole = async (role: UserRole): Promise<User[]> => {
+  const response = await apiClient.get<User[]>(`/auth/users?role=${role}`);
+  return response.data;
+};
+
+/**
+ * Deletes a user by their ID.
+ * @param userId - The ID of the user to delete.
+ */
+const deleteUser = async (userId: string): Promise<void> => {
+  await apiClient.delete(`/auth/users/${userId}`);
+};
+
+export const api = {
+    getUsersByRole,
+    deleteUser
+}
+
 export default apiClient;

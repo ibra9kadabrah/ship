@@ -30,12 +30,4 @@ if [ ! -d "$DB_DIR" ]; then
 fi
 
 echo "[ENTRYPOINT] Starting application..."
-
-# --- TEMPORARY FIX TO RECREATE DB ---
-if [ -f "$PERSISTENT_DB_PATH" ]; then
-    echo "[ENTRYPOINT] Deleting existing database file at $PERSISTENT_DB_PATH to force re-creation."
-    rm "$PERSISTENT_DB_PATH"
-fi
-# --- END TEMPORARY FIX ---
-
 exec node dist/app.js

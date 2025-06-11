@@ -17,13 +17,13 @@ import fs from 'fs';
 dotenv.config();
 
 // Setup database only if it does not exist
-// const dbPath = getDbPath();
-// if (!fs.existsSync(dbPath)) {
-//   console.log(`[app] Database not found at ${dbPath}, running setup...`);
+const dbPath = getDbPath();
+if (!fs.existsSync(dbPath)) {
+  console.log(`[app] Database not found at ${dbPath}, running setup...`);
   setupDatabase();
-// } else {
-//   console.log(`[app] Database found at ${dbPath}, skipping setup.`);
-// }
+} else {
+  console.log(`[app] Database found at ${dbPath}, skipping setup.`);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
