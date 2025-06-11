@@ -18,8 +18,7 @@ RUN npm run build
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Set environment variables
-ENV DATABASE_PATH=/usr/src/app/data/database.sqlite
+# Set environment variables - REMOVED DATABASE_PATH line
 ENV PORT=3000
 # ENV JWT_SECRET=your_jwt_secret_in_render_env # Set in Render UI
 
