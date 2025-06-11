@@ -10,6 +10,10 @@ const dbPathFromEnv = process.env.DATABASE_PATH;
 
 let dbPathToUse = dbPathFromEnv || defaultDbPath;
 
+export function getDbPath(): string {
+  return dbPathToUse;
+}
+
 // If DATABASE_PATH is set (e.g., for Render persistent disk), ensure its directory exists
 if (dbPathFromEnv) {
     const dbDir = path.dirname(dbPathFromEnv);

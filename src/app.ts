@@ -10,12 +10,20 @@ import debugRoutes from './routes/debug.routes'; // Add import for debug routes
 import vesselRoutes from './routes/vessel.routes';
 import authRoutes from './routes/auth.routes';
 import { setupDatabase } from './db/setup';
+import { getDbPath } from './db/connection'; // Import a function to get the path
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
 
-// Setup database
-setupDatabase();
+// Setup database only if it does not exist
+const dbPath = getDbPath();
+if (!fs.existsSync(dbPath)) {
+  console.log(`[app] Database not found at ${dbPath}, running setup...`);
+  setupDatabase();
+} else {
+  console.log(`[app] Database found at ${dbPath}, skipping setup.`);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
