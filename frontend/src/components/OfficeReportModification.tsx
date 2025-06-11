@@ -44,6 +44,8 @@ const EDITABLE_CRITICAL_FIELDS = Object.values({
   'Port & Voyage': ['departurePort', 'destinationPort', 'voyageNumber']
 }).flat();
 
+const OTHER_EDITABLE_FIELDS = ['passageState'];
+
 const REPORT_TYPE_DISPLAY_FIELDS: Record<ReportType, string[]> = {
   departure: ['reportDate', 'reportTime', 'timeZone', 'departurePort', 'destinationPort', 'voyageNumber', 'voyageDistance', 'fwdDraft', 'aftDraft', 'cargoQuantity', 'cargoType', 'cargoStatus', 'faspDate', 'faspTime', 'faspLatDeg', 'faspLatMin', 'faspLatDir', 'faspLonDeg', 'faspLonMin', 'faspLonDir', 'faspCourse', 'harbourDistance', 'distanceSinceLastReport', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'meConsumptionCylOil', 'meConsumptionMeOil', 'meConsumptionAeOil', 'boilerConsumptionLsifo', 'boilerConsumptionLsmgo', 'auxConsumptionLsifo', 'auxConsumptionLsmgo', 'supplyLsifo', 'supplyLsmgo', 'supplyCylOil', 'supplyMeOil', 'supplyAeOil', 'initialRobLsifo', 'initialRobLsmgo', 'initialRobCylOil', 'initialRobMeOil', 'initialRobAeOil', 'currentRobLsifo', 'currentRobLsmgo', 'currentRobCylOil', 'currentRobMeOil', 'currentRobAeOil', 'totalConsumptionLsifo', 'totalConsumptionLsmgo', 'totalConsumptionCylOil', 'totalConsumptionMeOil', 'totalConsumptionAeOil'],
   noon: ['reportDate', 'reportTime', 'timeZone', 'passageState', 'noonDate', 'noonTime', 'noonLatDeg', 'noonLatMin', 'noonLatDir', 'noonLonDeg', 'noonLonMin', 'noonLonDir', 'noonCourse', 'sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse', 'rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse', 'distanceSinceLastReport', 'totalDistanceTravelled', 'distanceToGo', 'avgSpeedVoyage', 'sailingTimeVoyage', 'meConsumptionLsifo', 'meConsumptionLsmgo', 'currentRobLsifo', 'currentRobLsmgo'],
@@ -142,8 +144,19 @@ export const OfficeReportModification: React.FC<OfficeReportModificationProps> =
               if (typeof value === 'object' && value !== null && !Array.isArray(value)) return null;
               if (Array.isArray(value)) return null;
 
-              const isEditable = EDITABLE_CRITICAL_FIELDS.includes(key);
+              const isEditable = EDITABLE_CRITICAL_FIELDS.includes(key) || OTHER_EDITABLE_FIELDS.includes(key);
               if (isEditable) {
+                if (key === 'passageState') {
+                  return (
+                    <PassageStateEditor
+                      key={key}
+                      fieldName={key}
+                      currentValue={reportData[key]}
+                      onChange={(val) => handleFieldChange(key, val)}
+                      isModified={modifications.some(m => m.fieldName === key)}
+                    />
+                  );
+                }
                 return (
                   <FieldEditor
                     key={key}
@@ -259,6 +272,31 @@ const FieldEditor: React.FC<FieldEditorProps> = ({
                     .some(keyword => fieldName.toLowerCase().includes(keyword)))
                     ? 'number' : 'text';
 
+  if (fieldName === 'passageState') {
+    return (
+      <div className={`p-3 border rounded-md ${isModified ? 'border-orange-400 bg-orange-50' : 'border-gray-300'}`}>
+        <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
+          {fieldName.replace(/([A-Z])/g, ' $1')}
+          {isModified && <span className="text-orange-600 ml-1">*</span>}
+        </label>
+        <select
+          value={value}
+          onChange={handleChange}
+          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">-- None --</option>
+          <option value="SOSP">SOSP</option>
+          <option value="ROSP" disabled>ROSP (Cannot be set directly)</option>
+        </select>
+        {(currentValue !== undefined && currentValue !== null) && (
+          <div className="text-xs text-gray-500 mt-1">
+            Current: {String(currentValue)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`p-3 border rounded-md ${isModified ? 'border-orange-400 bg-orange-50' : 'border-gray-300'}`}>
       <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
@@ -273,6 +311,44 @@ const FieldEditor: React.FC<FieldEditorProps> = ({
         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         placeholder={currentValue === null || currentValue === undefined ? 'N/A' : ''}
       />
+      {(currentValue !== undefined && currentValue !== null) && (
+        <div className="text-xs text-gray-500 mt-1">
+          Current: {String(currentValue)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PassageStateEditor: React.FC<FieldEditorProps> = ({
+  fieldName,
+  currentValue,
+  onChange,
+  isModified
+}) => {
+  const [value, setValue] = useState(currentValue === null || currentValue === undefined ? '' : String(currentValue));
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetValue = e.target.value;
+    setValue(targetValue);
+    onChange(targetValue === '' ? null : targetValue);
+  };
+
+  return (
+    <div className={`p-3 border rounded-md ${isModified ? 'border-orange-400 bg-orange-50' : 'border-gray-300'}`}>
+      <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
+        {fieldName.replace(/([A-Z])/g, ' $1')}
+        {isModified && <span className="text-orange-600 ml-1">*</span>}
+      </label>
+      <select
+        value={value}
+        onChange={handleChange}
+        className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isModified ? 'border-orange-400 bg-white' : 'border-gray-300'}`}
+      >
+        <option value="NOON">NOON</option>
+        <option value="SOSP">SOSP</option>
+        <option value="ROSP">ROSP</option>
+      </select>
       {(currentValue !== undefined && currentValue !== null) && (
         <div className="text-xs text-gray-500 mt-1">
           Current: {String(currentValue)}

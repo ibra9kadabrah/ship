@@ -1,5 +1,5 @@
 // src/services/cascade_calculator.service.ts
-import { Report, ReportType } from '../types/report';
+import { Report, ReportType, PassageState } from '../types/report';
 import ReportModel from '../models/report.model';
 import VoyageModel from '../models/voyage.model';
 import { calculateTotalConsumptions, calculateCurrentRobs, BunkerConsumptionInput, BunkerSupplyInput, PreviousRob, CurrentRobs } from './bunker_calculator';
@@ -39,6 +39,10 @@ export interface AffectedReport {
   errors: string[];
 }
 
+const SOSP_FIELDS: (keyof Report)[] = ['sospDate', 'sospTime', 'sospLatDeg', 'sospLatMin', 'sospLatDir', 'sospLonDeg', 'sospLonMin', 'sospLonDir', 'sospCourse'];
+const ROSP_FIELDS: (keyof Report)[] = ['rospDate', 'rospTime', 'rospLatDeg', 'rospLatMin', 'rospLatDir', 'rospLonDeg', 'rospLonMin', 'rospLonDir', 'rospCourse'];
+
+
 export const CascadeCalculatorService = {
   async calculateCascade(reportId: string, modifications: FieldModification[]): Promise<CascadeResult> {
     const sourceReportOriginal = ReportModel.findById(reportId) as Report;
@@ -49,16 +53,25 @@ export const CascadeCalculatorService = {
     if (!voyage) throw new Error(`Voyage ${sourceReportOriginal.voyageId} not found for report ${reportId}.`);
     let authoritativeVoyageDistance = voyage.voyageDistance ?? 0;
 
-    const criticalMods = modifications.filter(m => isCriticalField(m.fieldName));
     const modifiedSourceState = { ...sourceReportOriginal } as Report & Record<string, any>;
     
-    criticalMods.forEach(mod => {
+    // Apply ALL modifications to the source report state first
+    modifications.forEach(mod => {
       modifiedSourceState[mod.fieldName] = mod.newValue;
       if (mod.fieldName === 'voyageDistance' && sourceReportOriginal.reportType === 'departure') {
         authoritativeVoyageDistance = typeof mod.newValue === 'number' ? mod.newValue : authoritativeVoyageDistance;
         modifiedSourceState.voyageDistance = authoritativeVoyageDistance;
       }
     });
+
+    // If passageState is modified to a non-SOSP state, clear related SOSP fields
+    const passageStateMod = modifications.find(m => m.fieldName === 'passageState');
+    if (passageStateMod && passageStateMod.newValue !== 'SOSP') {
+      SOSP_FIELDS.forEach(field => { (modifiedSourceState as any)[field] = null; });
+    }
+    if (passageStateMod && passageStateMod.newValue !== 'ROSP') {
+      ROSP_FIELDS.forEach(field => { (modifiedSourceState as any)[field] = null; });
+    }
 
     let distanceDelta = 0;
     const bunkerRobDeltas: BunkerRobDeltas = {};
@@ -72,6 +85,7 @@ export const CascadeCalculatorService = {
     };
     const originalSourceCargoQuantity = (sourceReportOriginal as any).cargoQuantity ?? 0;
 
+    const criticalMods = modifications.filter(m => isCriticalField(m.fieldName));
     const modTypesForSource = new Set(criticalMods.map(m => getCascadeType(m.fieldName)).filter(Boolean));
 
     if (modTypesForSource.has('DISTANCE')) {
@@ -151,42 +165,58 @@ export const CascadeCalculatorService = {
     }
 
     const result: CascadeResult = { isValid: true, affectedReports: [], errors: [] };
-    if (criticalMods.length > 0) {
-      const sourceChanges: Record<string, FieldChange> = {};
-      for (const key in modifiedSourceState) {
-        if (Object.prototype.hasOwnProperty.call(modifiedSourceState, key)) {
-          const oldValue = (sourceReportOriginal as any)[key];
-          const newValue = modifiedSourceState[key];
-          if (String(oldValue) !== String(newValue)) {
-            if (typeof oldValue === 'number' && typeof newValue === 'number') {
-                if (Math.abs(oldValue - newValue) > 1e-5) sourceChanges[key] = { oldValue, newValue };
-            } else if (oldValue !== newValue) sourceChanges[key] = { oldValue, newValue };
+    
+    // Calculate changes for the source report by comparing final modifiedSourceState with original
+    const sourceChanges: Record<string, FieldChange> = {};
+    for (const key of Object.keys(modifiedSourceState) as (keyof Report)[]) {
+      const originalValue = (sourceReportOriginal as any)[key];
+      const finalValue = modifiedSourceState[key];
+
+      if (Object.prototype.hasOwnProperty.call(sourceReportOriginal, key)) { // Key existed in original
+        if (String(originalValue) !== String(finalValue)) {
+          if (typeof originalValue === 'number' && typeof finalValue === 'number' && Math.abs(originalValue - finalValue) < 1e-5) {
+            // Numbers are effectively the same, no change
+          } else if ((originalValue === null || originalValue === undefined) && (finalValue === null || finalValue === undefined)) {
+            // Both are null/undefined, no change
+          } else {
+            sourceChanges[key] = { oldValue: originalValue, newValue: finalValue };
           }
         }
+      } else if (finalValue !== undefined && finalValue !== null) { // New key added with a value
+        sourceChanges[key] = { oldValue: undefined, newValue: finalValue };
       }
-      criticalMods.forEach(mod => {
-        if (!sourceChanges[mod.fieldName] || sourceChanges[mod.fieldName].newValue !== mod.newValue) {
-             if (mod.oldValue !== mod.newValue) sourceChanges[mod.fieldName] = { oldValue: mod.oldValue, newValue: mod.newValue };
+    }
+    // Check for keys removed from original
+    for (const key of Object.keys(sourceReportOriginal) as (keyof Report)[]) {
+      if (!Object.prototype.hasOwnProperty.call(modifiedSourceState, key) || modifiedSourceState[key] === undefined) {
+        if (sourceReportOriginal[key] !== undefined && sourceReportOriginal[key] !== null && !sourceChanges[key]) {
+          sourceChanges[key] = { oldValue: sourceReportOriginal[key], newValue: undefined };
         }
-        modifiedSourceState[mod.fieldName] = mod.newValue;
-      });
+      }
+    }
+
+    if (Object.keys(sourceChanges).length > 0) {
       result.affectedReports.push({
         reportId: sourceReportOriginal.id, reportType: sourceReportOriginal.reportType,
-        changes: sourceChanges, finalState: { ...modifiedSourceState }, errors: []
+        changes: sourceChanges, finalState: { ...modifiedSourceState }, errors: [] // finalState is the fully modified source state
       });
     }
 
     const subsequentReports = this.getSubsequentReports(sourceReportOriginal);
+    let predecessorFinalState: Partial<Report> & Record<string, any> = { ...modifiedSourceState };
+
     for (const originalSubsequentReport of subsequentReports) {
       const affectedReportData = this.applyDeltasToReport(
         originalSubsequentReport, authoritativeVoyageDistance,
-        distanceDelta, bunkerRobDeltas, cargoQuantityDelta
+        distanceDelta, bunkerRobDeltas, cargoQuantityDelta,
+        predecessorFinalState.passageState as PassageState | null
       );
       result.affectedReports.push(affectedReportData);
       if (affectedReportData.errors.length > 0) {
         result.isValid = false;
         result.errors.push(...affectedReportData.errors);
       }
+      predecessorFinalState = affectedReportData.finalState;
     }
     return result;
   },
@@ -202,11 +232,12 @@ export const CascadeCalculatorService = {
   },
 
   applyDeltasToReport(
-    originalReport: Partial<Report>, 
+    originalReport: Partial<Report>,
     authoritativeVoyageDistance: number,
     distanceDelta: number,
     bunkerRobDeltas: BunkerRobDeltas,
-    cargoQuantityDelta: number
+    cargoQuantityDelta: number,
+    predecessorPassageState: PassageState | null // New parameter
   ): AffectedReport {
     const finalState: Partial<Report> & Record<string, any> = { ...originalReport };
     const changes: Record<string, FieldChange> = {};
@@ -225,14 +256,14 @@ export const CascadeCalculatorService = {
     if (Math.abs((oldDTG ?? 0) - newDTG) > 1e-5) changes.distanceToGo = { oldValue: oldDTG, newValue: newDTG };
     finalState.distanceToGo = newDTG;
     
-    const originalVoyageDistField = (originalReport as any).voyageDistance;
-    if (originalVoyageDistField !== authoritativeVoyageDistance && !(originalVoyageDistField === null && authoritativeVoyageDistance === 0) ) {
-        changes.voyageDistance = { oldValue: originalVoyageDistField, newValue: authoritativeVoyageDistance };
+    // Correctly handle voyageDistance so it doesn't show as a change if it's consistent.
+    if (finalState.reportType === 'departure' && finalState.voyageDistance !== authoritativeVoyageDistance) {
+        changes.voyageDistance = { oldValue: finalState.voyageDistance, newValue: authoritativeVoyageDistance };
+        finalState.voyageDistance = authoritativeVoyageDistance;
     }
-    (finalState as any).voyageDistance = authoritativeVoyageDistance;
 
     const sailingTime = originalReport.sailingTimeVoyage ?? 0;
-    finalState.sailingTimeVoyage = sailingTime; 
+    finalState.sailingTimeVoyage = sailingTime;
     const oldAvgSpeed = originalReport.avgSpeedVoyage;
     let newAvgSpeed = oldAvgSpeed;
     if (sailingTime > 0) newAvgSpeed = newTDT / sailingTime;
@@ -284,16 +315,31 @@ export const CascadeCalculatorService = {
     (finalState as any).cargoUnloaded = (originalReport as any).cargoUnloaded;
     (finalState as any).cargoType = (originalReport as any).cargoType;
 
+    // New: Passage State Cascade Logic
+    const originalPassageState = originalReport.passageState as PassageState | null;
+    if (originalPassageState === 'ROSP' && predecessorPassageState !== 'SOSP') {
+      if (finalState.passageState !== 'NOON') { // Assuming 'NOON' is the default
+        changes.passageState = { oldValue: originalPassageState, newValue: 'NOON' };
+      }
+      finalState.passageState = 'NOON';
+      ROSP_FIELDS.forEach(field => {
+        if ((finalState as any)[field] !== null) {
+          changes[field] = { oldValue: (finalState as any)[field], newValue: null };
+        }
+        (finalState as any)[field] = null;
+      });
+    }
+
     Object.keys(originalReport).forEach(key => {
         if (!(key in finalState)) (finalState as any)[key] = (originalReport as any)[key];
     });
 
-    return { 
-      reportId: originalReport.id!, 
-      reportType: originalReport.reportType!, 
-      changes, 
-      finalState, 
-      errors 
+    return {
+      reportId: originalReport.id!,
+      reportType: originalReport.reportType!,
+      changes,
+      finalState,
+      errors
     };
   },
 
