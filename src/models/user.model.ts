@@ -38,7 +38,7 @@ export const UserModel = {
   
   // Find user by username
   findByUsername(username: string): User | null {
-    const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
+    const stmt = db.prepare('SELECT * FROM users WHERE username = ? AND isActive = 1');
     const user = stmt.get(username) as User | undefined;
     
     return user || null;
