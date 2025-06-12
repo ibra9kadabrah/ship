@@ -6,6 +6,24 @@ import { User, CreateUserDTO, UpdateUserDTO, UserRole } from '../types/user';
 export const UserModel = {
   // Create a new user
   create(userData: CreateUserDTO): User {
+    // First, check for an inactive user with the same username
+    const inactiveUserStmt = db.prepare('SELECT * FROM users WHERE username = ? AND isActive = 0');
+    const inactiveUser = inactiveUserStmt.get(userData.username) as User | undefined;
+
+    if (inactiveUser) {
+      // If an inactive user exists, reactivate them and update their details
+      const now = new Date().toISOString();
+      const hashedPassword = bcrypt.hashSync(userData.password, 10);
+      const updateStmt = db.prepare(`
+        UPDATE users
+        SET password = ?, name = ?, role = ?, isActive = 1, updatedAt = ?
+        WHERE id = ?
+      `);
+      updateStmt.run(hashedPassword, userData.name, userData.role, now, inactiveUser.id);
+      return this.findById(inactiveUser.id) as User;
+    }
+
+    // If no inactive user exists, create a new one
     const id = uuidv4();
     const now = new Date().toISOString();
     const hashedPassword = bcrypt.hashSync(userData.password, 10);
