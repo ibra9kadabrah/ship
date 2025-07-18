@@ -3,12 +3,12 @@ export type UserRole = 'admin' | 'captain' | 'office';
 export interface User {
   id: string;
   username: string;
-  password: string;
+  password: string; // This is the hashed password
   name: string;
   role: UserRole;
-  createdAt: Date;
-  updatedAt: Date;
-  isActive: boolean;
+  createdat: string;
+  updatedat: string;
+  isactive: boolean;
 }
 
 export interface CreateUserDTO {

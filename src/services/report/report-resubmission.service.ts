@@ -1,4 +1,4 @@
-import db from '../../db/connection'; // For transactions
+import pool from '../../db/connection'; // For transactions
 import {
     Report,
     CreateReportDTO, // Used for the 'changes' payload
@@ -45,8 +45,8 @@ export class ReportResubmissionService {
     console.log(`[ReportResubmissionService] Called for reportId: ${reportIdFromParams} by captainId: ${captainId}`);
     console.log(`[ReportResubmissionService] Incoming 'changes' payload:`, JSON.stringify(changes, null, 2));
 
-    const transactionExecution = async () => {
-      const report = ReportModel.findById(reportIdFromParams);
+    const transactionExecution = async (client: any) => {
+      const report = await ReportModel.findById(reportIdFromParams, client);
       if (!report || !report.id) { // Ensure report and report.id exist
         throw new Error(`Report with ID ${reportIdFromParams} not found or has no ID.`);
       }
@@ -58,12 +58,12 @@ export class ReportResubmissionService {
       if (report.status !== 'changes_requested') {
         throw new Error(`Report ${currentReportId} is not in 'changes_requested' status. Current status: ${report.status}.`);
       }
-      if (!report.vesselId) { 
+      if (!report.vesselId) {
         throw new Error("Vessel ID is missing from the report, cannot resubmit.");
       }
       const vesselIdChecked: string = report.vesselId;
 
-      const vessel = VesselModel.findById(vesselIdChecked);
+      const vessel = await VesselModel.findById(vesselIdChecked, client);
       if (!vessel) {
           throw new Error(`Vessel with ID ${vesselIdChecked} not found during resubmission.`);
       }
@@ -72,7 +72,7 @@ export class ReportResubmissionService {
       let previousVoyageStateForRob: PreviousVoyageFinalState | null = null;
 
       if (report.reportType === 'departure') {
-        previousVoyageStateForRob = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(vesselIdChecked);
+        previousVoyageStateForRob = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(vesselIdChecked, client);
         if (previousVoyageStateForRob) {
             previousRobForRecalc = {
                 lsifo: previousVoyageStateForRob.finalRobLsifo ?? 0,
@@ -100,7 +100,7 @@ export class ReportResubmissionService {
             };
         }
       } else if (report.voyageId) {
-        const reportBeforeThisInVesselHistory = ReportModel.findPreviousReport(currentReportId, vesselIdChecked);
+        const reportBeforeThisInVesselHistory = await ReportModel.findPreviousReport(currentReportId, vesselIdChecked, client);
         if (reportBeforeThisInVesselHistory && reportBeforeThisInVesselHistory.voyageId === report.voyageId) {
             previousRobForRecalc = {
                 lsifo: reportBeforeThisInVesselHistory.currentRobLsifo ?? 0,
@@ -110,7 +110,7 @@ export class ReportResubmissionService {
                 aeOil: reportBeforeThisInVesselHistory.currentRobAeOil ?? 0,
             };
         } else { 
-            const voyageDeparture = ReportModel.getFirstReportForVoyage(report.voyageId);
+            const voyageDeparture = await ReportModel.getFirstReportForVoyage(report.voyageId, client);
             if (voyageDeparture && voyageDeparture.id !== currentReportId) {
                  previousRobForRecalc = {
                     lsifo: voyageDeparture.currentRobLsifo ?? 0,
@@ -141,10 +141,11 @@ export class ReportResubmissionService {
       if (report.reportType === 'berth' && report.voyageId) {
         const berthChanges = changes as Partial<BerthSpecificData>;
         if (berthChanges.cargoLoaded !== undefined || berthChanges.cargoUnloaded !== undefined) {
-            const newCargoQuantity = CargoCalculator.calculateResubmittedBerthCargoQuantity(
+            const newCargoQuantity = await CargoCalculator.calculateResubmittedBerthCargoQuantity(
               report as Report,
               berthChanges,
-              vessel
+              vessel,
+              client
             );
             if (newCargoQuantity !== null) {
               updateData.cargoQuantity = newCargoQuantity;
@@ -172,29 +173,33 @@ export class ReportResubmissionService {
       updateData.currentRobAeOil = recalculatedCurrentRobs.currentRobAeOil;
 
       if (engineUnits && report.reportType !== 'berth') {
-        ReportEngineUnitModel.deleteByReportId(currentReportId);
-        ReportEngineUnitModel.createMany(currentReportId, engineUnits);
+        await ReportEngineUnitModel.deleteByReportId(currentReportId, client);
+        await ReportEngineUnitModel.createMany(currentReportId, engineUnits, client);
       }
       if (auxEngines) {
-        ReportAuxEngineModel.deleteByReportId(currentReportId);
-        ReportAuxEngineModel.createMany(currentReportId, auxEngines);
+        await ReportAuxEngineModel.deleteByReportId(currentReportId, client);
+        await ReportAuxEngineModel.createMany(currentReportId, auxEngines, client);
       }
 
-      const success = ReportModel.update(currentReportId, updateData);
+      const success = await ReportModel.update(currentReportId, updateData, client);
       if (!success) {
         throw new Error(`Failed to update report ${currentReportId} during resubmission.`);
       }
       return currentReportId;
     };
 
-    const transactionFn = db.transaction(transactionExecution);
-
+    const client = await pool.connect();
     try {
-      const updatedReportId = await transactionFn();
+      await client.query('BEGIN');
+      const updatedReportId = await transactionExecution(client);
+      await client.query('COMMIT');
       return this.reportQueryService.getReportById(updatedReportId);
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error(`Report resubmission transaction failed for report ${reportIdFromParams}:`, error);
       throw error;
+    } finally {
+      client.release();
     }
   }
 }

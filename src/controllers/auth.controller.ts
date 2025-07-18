@@ -9,19 +9,19 @@ const TOKEN_EXPIRY = '24h';
 
 export const AuthController = {
   // Register a new user (admin only)
-  register(req: Request, res: Response): void {
+  async register(req: Request, res: Response): Promise<void> {
     try {
       const userData: CreateUserDTO = req.body;
       
       // Check if username already exists
-      const existingUser = UserModel.findByUsername(userData.username);
+      const existingUser = await UserModel.findByUsername(userData.username);
       if (existingUser) {
         res.status(400).json({ error: 'Username already exists' });
         return;
       }
       
       // Create the user
-      const user = UserModel.create(userData);
+      const user = await UserModel.create(userData);
       
       // Don't return the password
       const { password, ...userWithoutPassword } = user;
@@ -34,12 +34,12 @@ export const AuthController = {
   },
   
   // Login
-  login(req: Request, res: Response): void {
+  async login(req: Request, res: Response): Promise<void> {
     try {
       const loginData: UserLoginDTO = req.body;
       
       // Verify credentials
-      const user = UserModel.verifyCredentials(loginData.username, loginData.password);
+      const user = await UserModel.verifyCredentials(loginData.username, loginData.password);
       
       if (!user) {
         res.status(401).json({ error: 'Invalid credentials' });
@@ -62,10 +62,10 @@ export const AuthController = {
   },
   
   // Create initial admin (only if no admin exists)
-  createInitialAdmin(req: Request, res: Response): void {
+  async createInitialAdmin(req: Request, res: Response): Promise<void> {
     try {
       // Check if admin already exists
-      if (UserModel.adminExists()) {
+      if (await UserModel.adminExists()) {
         res.status(400).json({ error: 'Admin already exists' });
         return;
       }
@@ -76,7 +76,7 @@ export const AuthController = {
       adminData.role = 'admin';
       
       // Create the admin user
-      const admin = UserModel.create(adminData);
+      const admin = await UserModel.create(adminData);
       
       // Don't return the password
       const { password, ...adminWithoutPassword } = admin;
@@ -89,7 +89,7 @@ export const AuthController = {
   },
 
   // Get users by role (admin only)
-  getUsersByRole(req: Request, res: Response): void {
+  async getUsersByRole(req: Request, res: Response): Promise<void> {
     try {
       const role = req.query.role as UserRole;
 
@@ -99,7 +99,7 @@ export const AuthController = {
         return;
       }
 
-      const users = UserModel.findByRole(role);
+      const users = await UserModel.findByRole(role);
       
       // Exclude passwords from the response
       const usersWithoutPasswords = users.map(user => {
@@ -115,19 +115,19 @@ export const AuthController = {
   },
 
   // Delete a user (admin only)
-  deleteUser(req: Request, res: Response): void {
+  async deleteUser(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
 
       // Check if user exists
-      const existingUser = UserModel.findById(id);
+      const existingUser = await UserModel.findById(id);
       if (!existingUser) {
         res.status(404).json({ error: 'User not found' });
         return;
       }
 
       // Delete the user
-      UserModel.delete(id);
+      await UserModel.delete(id);
 
       res.status(204).send();
     } catch (error) {

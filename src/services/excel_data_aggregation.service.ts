@@ -253,42 +253,42 @@ export const ExcelDataAggregationService = {
     async aggregateDataForExcel(voyageId: string): Promise<AggregatedExcelDataDTO> {
         console.log(`[ExcelDataAggregationService] Starting data aggregation for voyageId: ${voyageId}`);
 
-        const voyage = VoyageModel.findById(voyageId);
+        const voyage = await VoyageModel.findById(voyageId);
         if (!voyage) throw new Error(`Voyage with ID ${voyageId} not found.`);
-        const vessel = VesselModel.findById(voyage.vesselId);
+        const vessel = await VesselModel.findById(voyage.vesselId);
         if (!vessel) throw new Error(`Vessel with ID ${voyage.vesselId} not found.`);
 
-        const allReportsForVoyage = ReportModel._getAllReportsForVoyage(voyageId);
+        const allReportsForVoyage = await ReportModel._getAllReportsForVoyage(voyageId);
         console.log(`[ExcelDataAggregationService] Total reports for voyage: ${allReportsForVoyage.length}`);
         
-        const approvedReports = allReportsForVoyage.filter(r => r.status === 'approved');
+        const approvedReports = allReportsForVoyage.filter((r: any) => r.status === 'approved');
         console.log(`[ExcelDataAggregationService] Approved reports: ${approvedReports.length}`);
         
         // Log report details before sorting
         console.log(`[ExcelDataAggregationService] Reports before sorting:`);
-        approvedReports.forEach(r => {
+        approvedReports.forEach((r: any) => {
             console.log(`  - Report ${r.id}: type=${r.reportType}, date=${r.reportDate}, time=${r.reportTime}`);
         });
         
         // Sort chronologically
-        approvedReports.sort((a, b) => getTimeFromReport(a) - getTimeFromReport(b));
+        approvedReports.sort((a: any, b: any) => getTimeFromReport(a) - getTimeFromReport(b));
         
         // Log report details after sorting
         console.log(`[ExcelDataAggregationService] Reports after sorting:`);
-        approvedReports.forEach(r => {
+        approvedReports.forEach((r: any) => {
             console.log(`  - Report ${r.id}: type=${r.reportType}, date=${r.reportDate}, time=${r.reportTime}, timestamp=${getTimeFromReport(r)}`);
         });
         
         if (approvedReports.length === 0) throw new Error(`No approved reports found for voyage ${voyageId}.`);
 
-        const departureReport = approvedReports.find(r => r.reportType === 'departure') as (Report & DepartureSpecificData) | undefined;
-        const arrivalReport = approvedReports.find(r => r.reportType === 'arrival') as (Report & ArrivalSpecificData) | undefined;
-        const noonReports = approvedReports.filter(r => r.reportType === 'noon') as (Report & NoonSpecificData)[];
-        const arrivalAnchorNoonReports = approvedReports.filter(r => r.reportType === 'arrival_anchor_noon') as (Report & ArrivalAnchorNoonSpecificData)[];
-        const berthReports = approvedReports.filter(r => r.reportType === 'berth') as (Report & BerthSpecificData)[];
+        const departureReport = approvedReports.find((r: any) => r.reportType === 'departure') as (Report & DepartureSpecificData) | undefined;
+        const arrivalReport = approvedReports.find((r: any) => r.reportType === 'arrival') as (Report & ArrivalSpecificData) | undefined;
+        const noonReports = approvedReports.filter((r: any) => r.reportType === 'noon') as (Report & NoonSpecificData)[];
+        const arrivalAnchorNoonReports = approvedReports.filter((r: any) => r.reportType === 'arrival_anchor_noon') as (Report & ArrivalAnchorNoonSpecificData)[];
+        const berthReports = approvedReports.filter((r: any) => r.reportType === 'berth') as (Report & BerthSpecificData)[];
 
         // Pass voyage.id as the currentVoyageId, and voyage.startDate for reference / logging
-        const nextVoyageDepartureReport = await VoyageLifecycleService.getNextVoyageDepartureReport(vessel.id, voyage.id, voyage.startDate);
+        const nextVoyageDepartureReport = await VoyageLifecycleService.getNextVoyageDepartureReport(vessel!.id, voyage.id, voyage.startDate);
         let nextVoyageDepartureDateTime = 'N/A';
         if (nextVoyageDepartureReport) {
             nextVoyageDepartureDateTime = formatDateTime(nextVoyageDepartureReport.reportDate, nextVoyageDepartureReport.reportTime);
@@ -663,9 +663,9 @@ export const ExcelDataAggregationService = {
 
 
         const aggregatedData: AggregatedExcelDataDTO = {
-            vesselName: vessel.name,
-            vesselImoNumber: vessel.imoNumber,
-            vesselType: vessel.type,
+            vesselName: vessel!.name,
+            vesselImoNumber: vessel!.imoNumber,
+            vesselType: vessel!.type,
             voyageNumber: voyage.voyageNumber || voyage.id,
             voyageDeparturePort: voyage.departurePort,
             voyageArrivalPort: voyage.destinationPort,

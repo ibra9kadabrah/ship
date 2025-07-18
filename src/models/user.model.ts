@@ -1,77 +1,57 @@
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
-import db from '../db/connection';
+import pool from '../db/connection';
 import { User, CreateUserDTO, UpdateUserDTO, UserRole } from '../types/user';
 
 export const UserModel = {
   // Create a new user
-  create(userData: CreateUserDTO): User {
+  async create(userData: CreateUserDTO): Promise<User> {
     // First, check for an inactive user with the same username
-    const inactiveUserStmt = db.prepare('SELECT * FROM users WHERE username = ? AND isActive = 0');
-    const inactiveUser = inactiveUserStmt.get(userData.username) as User | undefined;
+    const inactiveUserRes = await pool.query('SELECT * FROM users WHERE username = $1 AND isActive = false', [userData.username]);
+    const inactiveUser = inactiveUserRes.rows[0] as User | undefined;
 
     if (inactiveUser) {
       // If an inactive user exists, reactivate them and update their details
-      const now = new Date().toISOString();
       const hashedPassword = bcrypt.hashSync(userData.password, 10);
-      const updateStmt = db.prepare(`
-        UPDATE users
-        SET password = ?, name = ?, role = ?, isActive = 1, updatedAt = ?
-        WHERE id = ?
-      `);
-      updateStmt.run(hashedPassword, userData.name, userData.role, now, inactiveUser.id);
-      return this.findById(inactiveUser.id) as User;
+      await pool.query(
+        'UPDATE users SET password = $1, name = $2, role = $3, isActive = true, updatedAt = NOW() WHERE id = $4',
+        [hashedPassword, userData.name, userData.role, inactiveUser.id]
+      );
+      return (await this.findById(inactiveUser.id)) as User;
     }
 
     // If no inactive user exists, create a new one
     const id = uuidv4();
-    const now = new Date().toISOString();
     const hashedPassword = bcrypt.hashSync(userData.password, 10);
     
-    const stmt = db.prepare(`
-      INSERT INTO users (id, username, password, name, role, createdAt, updatedAt, isActive)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-    `);
-    
-    stmt.run(
-      id,
-      userData.username,
-      hashedPassword,
-      userData.name,
-      userData.role,
-      now,
-      now
+    await pool.query(
+      'INSERT INTO users (id, username, password, name, role, isActive) VALUES ($1, $2, $3, $4, $5, true)',
+      [id, userData.username, hashedPassword, userData.name, userData.role]
     );
     
-    return this.findById(id) as User;
+    return (await this.findById(id)) as User;
   },
   
   // Find user by ID
-  findById(id: string): User | null {
-    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-    const user = stmt.get(id) as User | undefined;
-    
-    return user || null;
+  async findById(id: string): Promise<User | null> {
+    const res = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return (res.rows[0] as User) || null;
   },
   
   // Find user by username
-  findByUsername(username: string): User | null {
-    const stmt = db.prepare('SELECT * FROM users WHERE username = ? AND isActive = 1');
-    const user = stmt.get(username) as User | undefined;
-    
-    return user || null;
+  async findByUsername(username: string): Promise<User | null> {
+    const res = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    return (res.rows[0] as User) || null;
   },
   
   // Get all users
-  findAll(): User[] {
-    const stmt = db.prepare('SELECT * FROM users WHERE isActive = 1 ORDER BY name');
-    return stmt.all() as User[];
+  async findAll(): Promise<User[]> {
+    const res = await pool.query('SELECT * FROM users WHERE isActive = true ORDER BY name');
+    return res.rows as User[];
   },
   
   // Update user
-  update(id: string, userData: UpdateUserDTO): User | null {
-    const now = new Date().toISOString();
-    
+  async update(id: string, userData: UpdateUserDTO): Promise<User | null> {
     // Handle password hashing if it's being updated
     if (userData.password) {
       userData.password = bcrypt.hashSync(userData.password, 10);
@@ -80,33 +60,29 @@ export const UserModel = {
     // Build the update query dynamically based on provided fields
     const updates = Object.entries(userData)
       .filter(([_, value]) => value !== undefined)
-      .map(([key, _]) => `${key} = ?`);
+      .map(([key, _], i) => `${key} = ${i + 1}`);
     
     if (updates.length === 0) {
       return this.findById(id);
     }
     
-    updates.push('updatedAt = ?');
+    updates.push(`updatedAt = NOW()`);
     
     const sql = `
       UPDATE users 
       SET ${updates.join(', ')}
-      WHERE id = ?
+      WHERE id = ${updates.length + 1}
     `;
     
     // Extract values in the same order as the updates
     const values = [
-      ...Object.entries(userData)
-        .filter(([_, value]) => value !== undefined)
-        .map(([_, value]) => value),
-      now,
+      ...Object.values(userData).filter(v => v !== undefined),
       id
     ];
     
-    const stmt = db.prepare(sql);
-    const result = stmt.run(...values);
+    const res = await pool.query(sql, values);
     
-    if (result.changes === 0) {
+    if (res.rowCount === 0) {
       return null;
     }
     
@@ -114,48 +90,49 @@ export const UserModel = {
   },
   
   // Delete user (soft delete)
-  delete(id: string): boolean {
-    const now = new Date().toISOString();
-    const stmt = db.prepare(`
-      UPDATE users
-      SET isActive = 0, updatedAt = ?
-      WHERE id = ?
-    `);
-    
-    const result = stmt.run(now, id);
-    return result.changes > 0;
+  async delete(id: string): Promise<boolean> {
+    const res = await pool.query('UPDATE users SET isActive = false, updatedAt = NOW() WHERE id = $1', [id]);
+    return res.rowCount! > 0;
   },
   
   // Verify user credentials
-  verifyCredentials(username: string, password: string): User | null {
-    const user = this.findByUsername(username);
+  async verifyCredentials(username: string, password: string): Promise<User | null> {
+    console.log(`[AUTH_DEBUG] Attempting to verify credentials for username: "${username}"`);
+    const user = await this.findByUsername(username);
     
-    if (!user || !user.isActive) {
+    if (!user) {
+      console.log(`[AUTH_DEBUG] User not found.`);
+      return null;
+    }
+    console.log(`[AUTH_DEBUG] User found: ${JSON.stringify(user, null, 2)}`);
+
+    if (!user.isactive) {
+      console.log(`[AUTH_DEBUG] User is not active.`);
       return null;
     }
     
     const passwordMatch = bcrypt.compareSync(password, user.password);
+    console.log(`[AUTH_DEBUG] Password match result: ${passwordMatch}`);
     
     if (!passwordMatch) {
+      console.log(`[AUTH_DEBUG] Password does not match.`);
       return null;
     }
     
+    console.log(`[AUTH_DEBUG] Credentials verified successfully.`);
     return user;
   },
   
   // Get users by role
-  findByRole(role: UserRole): User[] {
-    const stmt = db.prepare('SELECT * FROM users WHERE role = ? AND isActive = 1 ORDER BY name');
-    return stmt.all(role) as User[];
+  async findByRole(role: UserRole): Promise<User[]> {
+    const res = await pool.query('SELECT * FROM users WHERE role = $1 AND isActive = true ORDER BY name', [role]);
+    return res.rows as User[];
   },
   
   // Check if any admin exists
-  adminExists(): boolean {
-    // Use single quotes for string literals in SQLite, not double quotes
-    const stmt = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND isActive = 1");
-    const result = stmt.get() as { count: number };
-    
-    return result.count > 0;
+  async adminExists(): Promise<boolean> {
+    const res = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND isActive = true");
+    return (res.rows[0].count as number) > 0;
   }
 };
 

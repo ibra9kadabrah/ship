@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../db/connection'; // For transactions
+import pool from '../../db/connection'; // For transactions
 import {
     Report,
     CreateReportDTO,
@@ -53,19 +53,19 @@ export class ReportSubmissionService {
     const reportId = uuidv4();
 
     // --- 0. Pre-validation: Captain's pending reports for this vessel ---
-    ValidationOrchestrator.checkCaptainPendingReports(captainId, reportInput.vesselId);
+    await ValidationOrchestrator.checkCaptainPendingReports(captainId, reportInput.vesselId, pool);
 
     // --- 1. Fetch Vessel ---
-    const vessel = VesselModel.findById(reportInput.vesselId);
+    const vessel = await VesselModel.findById(reportInput.vesselId);
     if (!vessel) throw new Error(`Vessel with ID ${reportInput.vesselId} not found.`);
 
     // --- 2. Determine Voyage Context and Previous Report ---
-    let voyageToUse: Voyage | undefined = undefined;
+    let voyageToUse: Voyage | null = null;
     let previousReportForCalculations: Partial<Report> | null = null;
     let voyageIdToUse: string | null = null;
     let previousVoyageState: PreviousVoyageFinalState | null = null;
 
-    const activeVoyageCheck = VoyageModel.findActiveByVesselId(reportInput.vesselId);
+    const activeVoyageCheck = await VoyageModel.findActiveByVesselId(reportInput.vesselId);
 
     if (reportInput.reportType === 'departure') {
       previousVoyageState = await VoyageLifecycleService.findLatestCompletedVoyageFinalState(reportInput.vesselId);
@@ -84,17 +84,9 @@ export class ReportSubmissionService {
       }
 
       // --- START: Cargo Continuity Validation for Departure Reports ---
-      const absoluteLatestApprovedReportFromDb = ReportModel.getLatestApprovedReportForVessel(reportInput.vesselId);
-      
-      // Cast to a type that includes all potential DB fields for easier access
-      // ReportRecordData from report.model.ts is suitable here as it represents the flat DB structure.
-      // We need to import it or ensure Report type from ../types/report includes all these as optional.
-      // For now, assuming Report type from ../types/report.ts (imported as Report) has these as optional top-level fields
-      // as per its definition (lines 324-326 in the version I saw).
-      // If ReportModel returns Partial<Report>, and Report is the union, this is tricky.
+      const absoluteLatestApprovedReportFromDb = await ReportModel.getLatestApprovedReportForVessel(reportInput.vesselId);
       
       if (absoluteLatestApprovedReportFromDb) {
-        // Cast to ReportRecordData to access the flat DB structure fields
         const latestReportRecord = absoluteLatestApprovedReportFromDb as ReportRecordData;
 
         const depInput = reportInput as DepartureSpecificData;
@@ -102,7 +94,6 @@ export class ReportSubmissionService {
         const submittedCargoType = depInput.cargoType;
         const submittedCargoStatus = depInput.cargoStatus;
 
-        // Access fields from the ReportRecordData type
         const lastKnownCargoQuantity = latestReportRecord.cargoQuantity ?? 0;
         const lastKnownCargoType = latestReportRecord.cargoType ?? null;
         const lastKnownCargoStatus = latestReportRecord.cargoStatus ?? 'Empty';
@@ -128,17 +119,15 @@ export class ReportSubmissionService {
       }
       // --- END: Cargo Continuity Validation ---
 
-      // Validate cargo quantity against DWT (already present, good)
       CargoCalculator.validateCargoAgainstVesselCapacity(
         (reportInput as DepartureSpecificData).cargoQuantity ?? 0,
         vessel.deadweight,
         'departure'
       );
-      // For ROB calculations, previousReportForCalculations will be based on previousVoyageState or vessel's initial ROBs.
       if (previousVoyageState && previousVoyageState.reportId) {
-        previousReportForCalculations = ReportModel.findById(previousVoyageState.reportId);
+        previousReportForCalculations = await ReportModel.findById(previousVoyageState.reportId);
       } else {
-        previousReportForCalculations = ReportModel.getLatestReportForVessel(vessel.id); // Could be null
+        previousReportForCalculations = await ReportModel.getLatestReportForVessel(vessel.id); // Could be null
       }
     } else { // Noon, Arrival, Berth, AAN
       if (!activeVoyageCheck) {
@@ -146,24 +135,22 @@ export class ReportSubmissionService {
       }
       voyageToUse = activeVoyageCheck;
       voyageIdToUse = voyageToUse.id;
-      previousReportForCalculations = ReportModel.getLatestReportForVoyage(voyageToUse.id); // Get latest for *this* voyage
+      previousReportForCalculations = await ReportModel.getLatestReportForVoyage(voyageToUse.id); // Get latest for *this* voyage
     }
 
-    // --- Check for Pending Reports for the voyage (if not departure) ---
     if (reportInput.reportType !== 'departure' && voyageIdToUse) {
-      ValidationOrchestrator.checkVoyagePendingReports(captainId, voyageIdToUse);
+      await ValidationOrchestrator.checkVoyagePendingReports(captainId, voyageIdToUse, pool);
     }
 
-    // --- 3. Input Validation (using ValidationOrchestrator) ---
     const departureReportForValidation = (reportInput.reportType === 'berth' && voyageIdToUse)
-      ? ReportModel.getFirstReportForVoyage(voyageIdToUse)
+      ? await ReportModel.getFirstReportForVoyage(voyageIdToUse)
       : null;
     const initialCargoStatusForValidation = (departureReportForValidation?.reportType === 'departure')
       ? (departureReportForValidation as DepartureSpecificData).cargoStatus
       : null;
     let previousNoonPassageState: PassageState | null = null;
     if (reportInput.reportType === 'noon' && voyageIdToUse) {
-      const previousNoonReport = ReportModel.getLatestNoonReportForVoyage(voyageIdToUse);
+      const previousNoonReport = await ReportModel.getLatestNoonReportForVoyage(voyageIdToUse);
       previousNoonPassageState = previousNoonReport?.passageState ?? null;
     }
 
@@ -175,12 +162,11 @@ export class ReportSubmissionService {
       previousNoonPassageState
     );
 
-    // --- 4. Perform Calculations ---
     const robCalcs: RobCalculationResult = RobCalculator.calculateRobs(
       vessel,
       reportInput,
       previousReportForCalculations,
-      previousVoyageState // This is null for non-departure types
+      previousVoyageState
     );
 
     const distanceCalcVoyageDistance = voyageToUse?.voyageDistance ??
@@ -196,14 +182,13 @@ export class ReportSubmissionService {
     };
     const distanceOutput = calculateDistances(distanceInput);
 
-    // Cumulative Sailing Time & Avg Speed
     let previousApprovedReportsForPerf: Partial<Report>[] = [];
     if (voyageIdToUse) {
-        previousApprovedReportsForPerf = ReportModel._getAllReportsForVoyage(voyageIdToUse)
+        previousApprovedReportsForPerf = (await ReportModel._getAllReportsForVoyage(voyageIdToUse))
                                             .filter(r => r.status === 'approved');
     }
     const sailingTimeVoyage = PerformanceCalculator.calculateSailingTimeVoyage(
-      reportInput.meDailyRunHours, // meDailyRunHours is on BaseReportData, so available on reportInput
+      reportInput.meDailyRunHours,
       previousApprovedReportsForPerf
     );
     const avgSpeedVoyage = PerformanceCalculator.calculateAverageSpeedVoyage(
@@ -213,15 +198,15 @@ export class ReportSubmissionService {
 
     let berthCalculatedCargoQuantity: number | null = null;
     if (reportInput.reportType === 'berth' && voyageIdToUse) {
-      berthCalculatedCargoQuantity = CargoCalculator.calculateNewBerthCargoQuantity(
+      berthCalculatedCargoQuantity = await CargoCalculator.calculateNewBerthCargoQuantity(
         reportId,
         voyageIdToUse,
         reportInput as BerthSpecificData,
-        vessel.deadweight
+        vessel.deadweight,
+        pool
       );
     }
 
-    // --- 5. Prepare Data for Persistence (using ReportBuilder) ---
     const reportCalculations = {
         totalConsumptions: robCalcs.totalConsumptions,
         currentRobs: robCalcs.currentRobs,
@@ -232,24 +217,25 @@ export class ReportSubmissionService {
         initialRobDataForRecord: robCalcs.inputInitialRobData
     };
 
-    // Voyage ID association happens inside the transaction
     const reportRecordData = ReportBuilder.buildReportRecord(
       reportId,
       reportInput,
       captainId,
-      null, // voyageIdToAssociate will be set inside transaction
+      null,
       reportCalculations
     );
 
-
-    // --- 6. Execute Transaction ---
-    const transactionFn = db.transaction(async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
       let finalVoyageIdToAssociateWithReport: string;
 
       if (reportInput.reportType === 'departure') {
         const createdOrEnsuredVoyage = await VoyageLifecycleService.ensureNewVoyageIsCreated(
           reportInput.vesselId,
-          reportInput as Report & DepartureSpecificData // Cast, assuming it's populated enough
+          reportInput as Report & DepartureSpecificData,
+          client
         );
         finalVoyageIdToAssociateWithReport = createdOrEnsuredVoyage.id;
       } else {
@@ -259,39 +245,37 @@ export class ReportSubmissionService {
         finalVoyageIdToAssociateWithReport = voyageIdToUse;
       }
       
-      // Update voyageId in the record before creating
       reportRecordData.voyageId = finalVoyageIdToAssociateWithReport;
 
-      ReportModel._createReportRecord(reportRecordData);
+      await ReportModel._createReportRecord(reportRecordData, client);
 
       if (reportInput.reportType !== 'berth' && reportInput.engineUnits?.length) {
-        if (!ReportEngineUnitModel.createMany(reportId, reportInput.engineUnits)) {
+        if (!await ReportEngineUnitModel.createMany(reportId, reportInput.engineUnits, client)) {
           throw new Error("Failed to create engine units");
         }
       }
       if (reportInput.auxEngines?.length) {
-        if (!ReportAuxEngineModel.createMany(reportId, reportInput.auxEngines)) {
+        if (!await ReportAuxEngineModel.createMany(reportId, reportInput.auxEngines, client)) {
           throw new Error("Failed to create aux engines");
         }
       }
-      // Ensure report is linked if it was a departure and VoyageLifecycleService didn't update an existing report ID
       if (reportInput.reportType === 'departure') {
-          const createdReportCheck = ReportModel.findById(reportId);
+          const createdReportCheck = await ReportModel.findById(reportId, client);
           if (createdReportCheck && createdReportCheck.voyageId !== finalVoyageIdToAssociateWithReport) {
-              ReportModel.updateVoyageId(reportId, finalVoyageIdToAssociateWithReport);
+              await ReportModel.updateVoyageId(reportId, finalVoyageIdToAssociateWithReport, client);
           }
       }
-      return reportId;
-    });
-
-    try {
-      await transactionFn(); // Execute the transaction
-      // Fetch the full report using ReportQueryService to ensure consistency with getReportById
+      
+      await client.query('COMMIT');
+      
       const fullReport = await this.reportQueryService.getReportById(reportId);
-      return fullReport as Report; // Cast to Report as per original signature
+      return fullReport as Report;
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error(`Report submission transaction failed for report ${reportId}:`, error);
       throw error;
+    } finally {
+      client.release();
     }
   }
 }

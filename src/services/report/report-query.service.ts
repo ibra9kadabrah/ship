@@ -3,26 +3,21 @@ import {
     FullReportViewDTO,
     EngineUnitData,
     AuxEngineData,
-    // ReportStatus, // Not directly used here, but good for context
-    // CreateReportDTO // Not for query service
 } from '../../types/report';
 import { Vessel } from '../../types/vessel';
-import { User } from '../../types/user'; // Corrected import path
+import { User } from '../../types/user';
 import ReportModel from '../../models/report.model';
 import VesselModel from '../../models/vessel.model';
 import UserModel from '../../models/user.model';
 import ReportEngineUnitModel from '../../models/report_engine_unit.model';
 import ReportAuxEngineModel from '../../models/report_aux_engine.model';
 
-// This DTO might be useful if the list views need slightly different data than FullReportViewDTO
-// For now, using Partial<Report> & { vesselName?: string; captainName?: string } as per original service
 export type ReportListDTO = Partial<Report> & { vesselName?: string; captainName?: string };
-
 
 export class ReportQueryService {
   async getReportById(id: string): Promise<FullReportViewDTO> {
     console.log(`[ReportQueryService] Searching for report with ID: ${id}`);
-    const reportBase = ReportModel.findById(id);
+    const reportBase = await ReportModel.findById(id);
     if (!reportBase) throw new Error(`Report with ID ${id} not found.`);
 
     if (!reportBase.vesselId || !reportBase.captainId) {
@@ -31,7 +26,6 @@ export class ReportQueryService {
 
     const hasVoyageId = reportBase.voyageId !== null && reportBase.voyageId !== undefined;
 
-    // Fetch related data in parallel
     const vesselPromise = VesselModel.findById(reportBase.vesselId);
     const captainPromise = UserModel.findById(reportBase.captainId);
     const departureReportPromise = hasVoyageId
@@ -49,10 +43,10 @@ export class ReportQueryService {
     ]);
 
     return this.buildFullReportDTO(
-        reportBase as Report, // Cast as it should be a full report by this point if found
+        reportBase as Report,
         vessel,
         captain,
-        departureReport as Report | null, // Cast as it could be null
+        departureReport as Report | null,
         engineUnits || [],
         auxEngines || []
     );
@@ -98,19 +92,18 @@ export class ReportQueryService {
   }
 
   async getPendingReports(vesselId?: string): Promise<ReportListDTO[]> {
-    const reportsWithNames = ReportModel.getPendingReports(vesselId);
+    const reportsWithNames = await ReportModel.getPendingReports(vesselId);
     return reportsWithNames;
   }
 
   async getReportsByCaptainId(captainId: string): Promise<Partial<Report>[]> {
-    const reports = ReportModel.findByCaptainId(captainId);
-    // Consider if full DTOs are needed or if partial is sufficient for captain's history
+    const reports = await ReportModel.findByCaptainId(captainId);
     console.warn("[ReportQueryService.getReportsByCaptainId] returns base data only; related machinery not fetched by default.");
     return reports;
   }
 
   async getAllReports(vesselId?: string): Promise<ReportListDTO[]> {
-    const reportsWithNames = ReportModel.findAll(vesselId);
+    const reportsWithNames = await ReportModel.findAll(vesselId);
     return reportsWithNames;
   }
 }

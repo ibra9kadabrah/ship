@@ -9,7 +9,7 @@ export const ReportModificationService = {
     previewOnly: boolean = false
   ): Promise<{ success: boolean; cascadeResult: CascadeResult; error?: string }> {
     
-    const originalReport = ReportModel.findById(reportId);
+    const originalReport = await ReportModel.findById(reportId);
     if (!originalReport || originalReport.status !== 'approved') {
       return { 
         success: false, 
@@ -29,7 +29,7 @@ export const ReportModificationService = {
     const sourceUpdates: Record<string, any> = {};
     modifications.forEach(mod => sourceUpdates[mod.fieldName] = mod.newValue);
 
-    const sourceUpdateSuccess = ReportModel.update(reportId, sourceUpdates);
+    const sourceUpdateSuccess = await ReportModel.update(reportId, sourceUpdates);
     if (!sourceUpdateSuccess) {
       return { success: false, cascadeResult, error: 'Failed to update source report' };
     }
@@ -37,7 +37,7 @@ export const ReportModificationService = {
     for (const affectedReport of cascadeResult.affectedReports) {
       // Use finalState which contains all recalculated fields for the update
       if (Object.keys(affectedReport.finalState).length > 0) { 
-        const updateSuccess = ReportModel.update(affectedReport.reportId, affectedReport.finalState);
+        const updateSuccess = await ReportModel.update(affectedReport.reportId, affectedReport.finalState);
         if (!updateSuccess) {
           console.error(`Failed to update report ${affectedReport.reportId}`);
           // Consider if this should halt the process or collect errors

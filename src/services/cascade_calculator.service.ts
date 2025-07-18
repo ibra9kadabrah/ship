@@ -45,11 +45,11 @@ const ROSP_FIELDS: (keyof Report)[] = ['rospDate', 'rospTime', 'rospLatDeg', 'ro
 
 export const CascadeCalculatorService = {
   async calculateCascade(reportId: string, modifications: FieldModification[]): Promise<CascadeResult> {
-    const sourceReportOriginal = ReportModel.findById(reportId) as Report;
+    const sourceReportOriginal = await ReportModel.findById(reportId) as Report;
     if (!sourceReportOriginal) throw new Error(`Report ${reportId} not found`);
     if (!sourceReportOriginal.voyageId) throw new Error(`Source report ${reportId} does not have a voyageId.`);
 
-    const voyage = VoyageModel.findById(sourceReportOriginal.voyageId);
+    const voyage = await VoyageModel.findById(sourceReportOriginal.voyageId);
     if (!voyage) throw new Error(`Voyage ${sourceReportOriginal.voyageId} not found for report ${reportId}.`);
     let authoritativeVoyageDistance = voyage.voyageDistance ?? 0;
 
@@ -98,7 +98,7 @@ export const CascadeCalculatorService = {
       } else if (criticalMods.some(m => m.fieldName === 'totalDistanceTravelled')) {
         distanceDelta = (modifiedSourceState.totalDistanceTravelled ?? 0) - originalSourceTDT;
       } else if (sourceReportOriginal.reportType !== 'departure' && criticalMods.some(m => m.fieldName === 'distanceSinceLastReport')) {
-        const reportBeforeSource = ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
+        const reportBeforeSource = await ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
         const prevTotalDist = reportBeforeSource?.totalDistanceTravelled ?? 0;
         modifiedSourceState.totalDistanceTravelled = prevTotalDist + (modifiedSourceState.distanceSinceLastReport ?? 0);
         distanceDelta = (modifiedSourceState.totalDistanceTravelled ?? 0) - originalSourceTDT;
@@ -121,7 +121,7 @@ export const CascadeCalculatorService = {
           aeOil: modifiedSourceState.initialRobAeOil ?? 0,
         };
       } else {
-        const reportBeforeSource = ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
+        const reportBeforeSource = await ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
         if (reportBeforeSource) prevRobForSource = {
             lsifo: reportBeforeSource.currentRobLsifo ?? 0, lsmgo: reportBeforeSource.currentRobLsmgo ?? 0,
             cylOil: reportBeforeSource.currentRobCylOil ?? 0, meOil: reportBeforeSource.currentRobMeOil ?? 0,
@@ -152,7 +152,7 @@ export const CascadeCalculatorService = {
 
     if (modTypesForSource.has('CARGO') && modifiedSourceState.reportType === 'berth') {
       let prevCargoQtyForSource = 0;
-      const reportBeforeSource = ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
+      const reportBeforeSource = await ReportModel.findPreviousReport(modifiedSourceState.id, modifiedSourceState.vesselId);
       if (reportBeforeSource) prevCargoQtyForSource = (reportBeforeSource as any).cargoQuantity ?? 0;
       
       const cargoLoaded = modifiedSourceState.cargoLoaded ?? 0;
@@ -202,7 +202,7 @@ export const CascadeCalculatorService = {
       });
     }
 
-    const subsequentReports = this.getSubsequentReports(sourceReportOriginal);
+    const subsequentReports = await this.getSubsequentReports(sourceReportOriginal);
     let predecessorFinalState: Partial<Report> & Record<string, any> = { ...modifiedSourceState };
 
     for (const originalSubsequentReport of subsequentReports) {
@@ -221,11 +221,11 @@ export const CascadeCalculatorService = {
     return result;
   },
 
-  getSubsequentReports(sourceReport: Partial<Report>): Partial<Report>[] { 
+  async getSubsequentReports(sourceReport: Partial<Report>): Promise<Partial<Report>[]> {
     if (!sourceReport.voyageId) return [];
-    const allReports = ReportModel._getAllReportsForVoyage(sourceReport.voyageId)
+    const allReports = (await ReportModel._getAllReportsForVoyage(sourceReport.voyageId))
       .filter(r => r.status === 'approved' && r.id !== sourceReport.id)
-      .map(r => ({ ...r })); 
+      .map(r => ({ ...r }));
     allReports.sort((a, b) => this.getTimestamp(a) - this.getTimestamp(b));
     const sourceTimestamp = this.getTimestamp(sourceReport);
     return allReports.filter(r => this.getTimestamp(r) > sourceTimestamp);

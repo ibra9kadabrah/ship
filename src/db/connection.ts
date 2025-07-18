@@ -1,31 +1,25 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
 
-// Determine project root dynamically, works in both src and dist
-const projectRoot = path.resolve(__dirname, '../../');
+dotenv.config();
 
-const defaultDbPath = path.join(projectRoot, 'database.sqlite');
-const dbPathFromEnv = process.env.DATABASE_PATH;
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  options: `-c search_path=mrv_app`
+});
 
-let dbPathToUse = dbPathFromEnv || defaultDbPath;
+pool.on('connect', (client) => {
+  client.query('SET search_path TO mrv_app');
+  console.log('[DB] Connected to PostgreSQL');
+});
 
-export function getDbPath(): string {
-  return dbPathToUse;
-}
+pool.on('error', (err) => {
+  console.error('[DB] Error with PostgreSQL pool', err);
+  process.exit(-1);
+});
 
-// If DATABASE_PATH is set (e.g., for Render persistent disk), ensure its directory exists
-if (dbPathFromEnv) {
-    const dbDir = path.dirname(dbPathFromEnv);
-    if (!fs.existsSync(dbDir)) {
-        console.log(`[DB] Creating directory for database: ${dbDir}`);
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
-}
-
-console.log(`[DB] Using database at: ${dbPathToUse}`);
-// The { fileMustExist: true } option can be added if the initial DB seeding is handled robustly by the entrypoint.
-// For now, allow it to create if not exists, setupDatabase will initialize tables.
-const db = new Database(dbPathToUse, { verbose: console.log /*, fileMustExist: false */ });
-
-export default db;
+export default pool;

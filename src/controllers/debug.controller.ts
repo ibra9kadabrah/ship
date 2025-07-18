@@ -19,21 +19,21 @@ export const DebugController = {
       console.log(`[DebugController] Fetching Excel debug data for voyage: ${voyageId}`);
       
       // Get voyage details
-      const voyage = VoyageModel.findById(voyageId);
+      const voyage = await VoyageModel.findById(voyageId);
       if (!voyage) {
         res.status(404).json({ error: `Voyage ${voyageId} not found` });
         return;
       }
       
       // Get vessel details
-      const vessel = VesselModel.findById(voyage.vesselId);
+      const vessel = await VesselModel.findById(voyage.vesselId);
       if (!vessel) {
         res.status(404).json({ error: `Vessel ${voyage.vesselId} not found` });
         return;
       }
       
       // Get all reports for the voyage
-      const allReports = ReportModel._getAllReportsForVoyage(voyageId);
+      const allReports = await ReportModel._getAllReportsForVoyage(voyageId);
       const approvedReports = allReports.filter(r => r.status === 'approved');
       
       // Sort reports chronologically

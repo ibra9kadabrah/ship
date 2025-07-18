@@ -1,6 +1,8 @@
+import { PoolClient } from 'pg';
+import pool from '../../../db/connection';
 import { Report, ReportType, BerthSpecificData, DepartureSpecificData } from '../../../types/report';
 import { Vessel } from '../../../types/vessel';
-import ReportModel from '../../../models/report.model'; // Required for fetching previous reports
+import ReportModel from '../../../models/report.model';
 import { ReportRecordData } from './report-builder'; // Import ReportRecordData
 
 export class CargoCalculator {
@@ -35,19 +37,19 @@ export class CargoCalculator {
    * Calculates the cargo quantity for a new berth report based on previous operations in the voyage.
    * Logic extracted from the original ReportService.submitReport.
    */
-  static calculateNewBerthCargoQuantity(
+  static async calculateNewBerthCargoQuantity(
     reportId: string, // ID of the current berth report being submitted
     voyageId: string,
     currentBerthInput: BerthSpecificData, // The cargoLoaded/Unloaded for the current operation
-    vesselDeadweight: number | null | undefined
-  ): number {
+    vesselDeadweight: number | null | undefined,
+    client: PoolClient | import('pg').Pool = pool
+  ): Promise<number> {
     console.log(`[CargoCalculator.calculateNewBerthCargoQuantity] Calculating for voyageId: ${voyageId}, new berth report: ${reportId}`);
 
-    const approvedDepartureReportFromModel = ReportModel.findLatestApprovedDepartureReportForVoyage(voyageId);
+    const approvedDepartureReportFromModel = await ReportModel.findLatestApprovedDepartureReportForVoyage(voyageId, client);
     let baseCargoQuantity = 0;
 
     if (approvedDepartureReportFromModel && approvedDepartureReportFromModel.reportType === 'departure') {
-      // Cast to access departure specific fields after checking reportType
       const departureReport = approvedDepartureReportFromModel as Partial<DepartureSpecificData>;
       if (typeof departureReport.cargoQuantity === 'number') {
         baseCargoQuantity = departureReport.cargoQuantity;
@@ -57,8 +59,7 @@ export class CargoCalculator {
       console.warn(`[CargoCalculator.calculateNewBerthCargoQuantity] Could not find an approved Departure report or its cargoQuantity for voyage ${voyageId}. Defaulting baseCargoQuantity to 0.`);
     }
 
-    // Get all previously approved berth reports for this voyage to sum up their operations
-    const previousApprovedBerthReports = ReportModel._getAllReportsForVoyage(voyageId)
+    const previousApprovedBerthReports = (await ReportModel._getAllReportsForVoyage(voyageId, client))
       .filter(r => r.reportType === 'berth' && r.status === 'approved' && r.id !== reportId)
       .sort((a, b) => new Date(`${a.reportDate}T${a.reportTime}`).getTime() - new Date(`${b.reportDate}T${b.reportTime}`).getTime());
 
@@ -85,29 +86,26 @@ export class CargoCalculator {
    * Calculates the cargo quantity for a resubmitted berth report.
    * Logic extracted from the original ReportService.resubmitReport.
    */
-  static calculateResubmittedBerthCargoQuantity(
+  static async calculateResubmittedBerthCargoQuantity(
     reportBeingResubmitted: Report, // The full original report object being resubmitted
     changes: Partial<BerthSpecificData>, // The changes being applied
-    vessel: Vessel
-  ): number | null { // Returns null if cargo not changed or not a berth report
+    vessel: Vessel,
+    client: PoolClient | import('pg').Pool = pool
+  ): Promise<number | null> { // Returns null if cargo not changed or not a berth report
     if (reportBeingResubmitted.reportType !== 'berth' || !reportBeingResubmitted.voyageId) {
-        return null; // Or throw error, depending on how it's called
+        return null;
     }
 
     const voyageId = reportBeingResubmitted.voyageId;
-    // Cast to ReportRecordData to access top-level cargoQuantity if it exists
     const originalBerthDataAsRecord = reportBeingResubmitted as ReportRecordData;
 
-    // Only recalculate if cargoLoaded or cargoUnloaded are part of the changes
     if (changes.cargoLoaded === undefined && changes.cargoUnloaded === undefined) {
-      // Access cargoQuantity from the ReportRecordData perspective
       return originalBerthDataAsRecord.cargoQuantity ?? null;
     }
     console.log(`[CargoCalculator.calculateResubmittedBerthCargoQuantity] Recalculating cargo for resubmitted berth report ${reportBeingResubmitted.id} in voyage ${voyageId}`);
 
 
-    // Fetch all approved reports for the voyage up to the one BEFORE the current report
-    const voyageReportsPriorToCurrent = ReportModel._getAllReportsForVoyage(voyageId)
+    const voyageReportsPriorToCurrent = (await ReportModel._getAllReportsForVoyage(voyageId, client))
       .filter(r =>
         r.id !== reportBeingResubmitted.id &&
         r.status === 'approved' &&
@@ -124,7 +122,7 @@ export class CargoCalculator {
         baseCargoQuantity = departureReport.cargoQuantity;
       }
     } else {
-      const firstVoyageReport = ReportModel.getFirstReportForVoyage(voyageId);
+      const firstVoyageReport = await ReportModel.getFirstReportForVoyage(voyageId, client);
       if (firstVoyageReport && firstVoyageReport.reportType === 'departure') {
         const typedFirstVoyageReport = firstVoyageReport as Partial<DepartureSpecificData>;
         if (typeof typedFirstVoyageReport.cargoQuantity === 'number') {
@@ -139,7 +137,7 @@ export class CargoCalculator {
 
     voyageReportsPriorToCurrent.forEach(prevReport => {
       if (prevReport.reportType === 'berth') {
-        const prevBerth = prevReport as Report & BerthSpecificData; // prevReport is Partial<Report>, cast to full for BerthSpecificData
+        const prevBerth = prevReport as Report & BerthSpecificData;
         const loaded = prevBerth.cargoLoaded ?? 0;
         const unloaded = prevBerth.cargoUnloaded ?? 0;
         baseCargoQuantity += loaded - unloaded;

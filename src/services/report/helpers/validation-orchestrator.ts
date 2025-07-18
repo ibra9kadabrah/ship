@@ -1,3 +1,5 @@
+import { PoolClient } from 'pg';
+import pool from '../../../db/connection';
 import {
     CreateReportDTO,
     Report,
@@ -29,8 +31,8 @@ export class ValidationOrchestrator {
    * Checks if the captain already has any pending reports for the given vessel.
    * Throws an error if pending reports exist.
    */
-  static checkCaptainPendingReports(captainId: string, vesselId: string): void {
-    if (ReportModel.hasPendingReports(captainId, vesselId)) {
+  static async checkCaptainPendingReports(captainId: string, vesselId: string, client: PoolClient | import('pg').Pool = pool): Promise<void> {
+    if (await ReportModel.hasPendingReports(captainId, vesselId, client)) {
       throw new Error(`Cannot submit new report: Captain ${captainId} already has a pending report for vessel ${vesselId}.`);
     }
   }
@@ -39,8 +41,8 @@ export class ValidationOrchestrator {
    * Checks if there are pending reports for a specific voyage by the captain.
    * Throws an error if pending reports exist for that voyage.
    */
-  static checkVoyagePendingReports(captainId: string, voyageId: string): void {
-    if (ReportModel.hasPendingReportsForVoyage(captainId, voyageId)) {
+  static async checkVoyagePendingReports(captainId: string, voyageId: string, client: PoolClient | import('pg').Pool = pool): Promise<void> {
+    if (await ReportModel.hasPendingReportsForVoyage(captainId, voyageId, client)) {
       throw new Error(`Cannot submit report: A previous report for voyage ${voyageId} submitted by this captain is still pending review.`);
     }
   }
@@ -319,9 +321,8 @@ export class ValidationOrchestrator {
     for (const field of fields) {
       const value = reportInput[field];
       if (value === undefined || value === null || (typeof value === 'string' && value === '')) {
-        if (typeof value === 'number' && value === 0) continue; // Allow 0 for any numeric field
+        if (typeof value === 'number' && value === 0) continue;
 
-        // Special handling for consumption fields in AAN if allowZeroForConsumption is true
         if (allowZeroForConsumption && typeof field === 'string' && field.startsWith('meConsumption') && (value === null || value === undefined || Number(value) === 0)) {
             continue;
         }

@@ -1,16 +1,15 @@
-import db from '../../db/connection'; // For transactions
+import pool from '../../db/connection'; // For transactions
 import {
     Report,
     ReviewReportDTO,
     FullReportViewDTO,
     ReportStatus,
     DepartureSpecificData,
-    // ReportType // Not directly used but good for context
 } from '../../types/report';
 import ReportModel from '../../models/report.model';
 import VesselModel from '../../models/vessel.model';
 import VoyageModel from '../../models/voyage.model';
-import { ReportQueryService } from './report-query.service'; // To fetch the full report after review
+import { ReportQueryService } from './report-query.service';
 
 export class ReportReviewService {
   private reportQueryService: ReportQueryService;
@@ -24,29 +23,26 @@ export class ReportReviewService {
     reviewData: ReviewReportDTO,
     reviewerId: string
   ): Promise<FullReportViewDTO> {
-    const reviewTransaction = () => {
-      // 1. Fetch the report being reviewed *within the transaction*
-      const reportToReview = ReportModel.findById(reportId);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const reportToReview = await ReportModel.findById(reportId, client);
       if (!reportToReview) {
         throw new Error(`Report with ID ${reportId} not found.`);
       }
-      // 2. Check current status *within the transaction*
       if (reportToReview.status !== 'pending') {
         throw new Error(`Report ${reportId} has already been reviewed (status: ${reportToReview.status}).`);
       }
 
-      let robUpdateSuccess = true; // Assume success unless update is needed and fails
-
-      // --- Voyage Creation/Completion/Linking Logic on Departure Approval ---
       if (reviewData.status === 'approved' && reportToReview.reportType === 'departure') {
         console.log(`[ReportReviewService] Approving departure report ${reportId}. Handling voyage logic...`);
-        const vesselId = reportToReview.vesselId as string; // Should exist
+        const vesselId = reportToReview.vesselId as string;
 
-        // 1. Check and complete previous voyage
-        const actualPreviousReport = ReportModel.findPreviousReport(reportId, vesselId);
+        const actualPreviousReport = await ReportModel.findPreviousReport(reportId, vesselId, client);
         if (actualPreviousReport && (actualPreviousReport.reportType === 'arrival' || actualPreviousReport.reportType === 'berth')) {
           if (actualPreviousReport.voyageId) {
-            VoyageModel.completeVoyage(actualPreviousReport.voyageId);
+            await VoyageModel.completeVoyage(actualPreviousReport.voyageId, client);
             console.log(`[ReportReviewService] Completed previous voyage ${actualPreviousReport.voyageId} during approval of report ${reportId}`);
           } else {
             console.warn(`[ReportReviewService] Previous report ${actualPreviousReport.id} was ${actualPreviousReport.reportType} but had no voyageId to complete.`);
@@ -55,7 +51,6 @@ export class ReportReviewService {
           console.log(`[ReportReviewService] No previous arrival/berth report found for vessel ${vesselId} before report ${reportId}, or previous report had no voyageId. No voyage marked as completed.`);
         }
 
-        // 2. Create the new voyage (assuming reportToReview has enough data)
         const departureData = reportToReview as Report & DepartureSpecificData;
         if (!departureData.departurePort || !departureData.destinationPort || departureData.voyageDistance === null || departureData.voyageDistance === undefined || !departureData.reportDate) {
           throw new Error(`Cannot create voyage: Missing required data (ports, distance, date) on departure report ${reportId}.`);
@@ -67,21 +62,19 @@ export class ReportReviewService {
           voyageDistance: departureData.voyageDistance,
           startDate: departureData.reportDate
         };
-        const newVoyage = VoyageModel.create(voyageData);
+        const newVoyage = await VoyageModel.create(voyageData, client);
         console.log(`[ReportReviewService] Created new voyage ${newVoyage.id} during approval of report ${reportId}`);
 
-        // 3. Link the report to the new voyage
-        const linkSuccess = ReportModel.updateVoyageId(reportId, newVoyage.id);
+        const linkSuccess = await ReportModel.updateVoyageId(reportId, newVoyage.id, client);
         if (!linkSuccess) {
           throw new Error(`Failed to link report ${reportId} to new voyage ${newVoyage.id}.`);
         }
 
-        // 4. Vessel ROB update logic
-        const vesselForRobUpdate = VesselModel.findById(vesselId);
+        const vesselForRobUpdate = await VesselModel.findById(vesselId, client);
         if (!vesselForRobUpdate) {
           throw new Error(`Associated vessel ${vesselId} not found for report ${reportId} during ROB update check.`);
         }
-        if (vesselForRobUpdate.initialRobLsifo === null) { // First *approved* departure
+        if (vesselForRobUpdate.initialRobLsifo === null) {
           console.log(`[ReportReviewService] Updating initial ROBs for vessel ${vesselId} as part of first departure approval (${reportId}).`);
           const initialRobDataFromReport = {
             initialRobLsifo: reportToReview.initialRobLsifo,
@@ -94,46 +87,31 @@ export class ReportReviewService {
             Object.entries(initialRobDataFromReport).filter(([_, v]) => v !== null && v !== undefined)
           );
           if (Object.keys(validInitialRobData).length > 0) {
-            robUpdateSuccess = VesselModel.updateInitialRob(vesselId, validInitialRobData);
+            const robUpdateSuccess = await VesselModel.updateInitialRob(vesselId, validInitialRobData, client);
             if (!robUpdateSuccess) {
               console.error(`[ReportReviewService] Failed to update initial ROB for vessel ${vesselId} while approving report ${reportId}.`);
+              throw new Error(`Failed to update initial ROB for vessel ${reportToReview.vesselId}.`);
             }
           } else {
             console.warn(`[ReportReviewService] First departure report ${reportId} approved, but no initial ROB data found in the report record to update vessel ${vesselId}.`);
           }
         }
       }
-      // --- END NEW Logic ---
 
-      // 4. Update the report status itself
-      const statusUpdateSuccess = ReportModel.reviewReport(reportId, reviewData, reviewerId);
+      const statusUpdateSuccess = await ReportModel.reviewReport(reportId, reviewData, reviewerId, client);
 
-      if (!robUpdateSuccess) {
-        throw new Error(`Failed to update initial ROB for vessel ${reportToReview.vesselId}.`);
-      }
       if (!statusUpdateSuccess) {
         throw new Error(`Failed to update report status for ${reportId}.`);
       }
-    };
 
-    // Execute the transaction using db.transaction
-    // The actual execution of the function passed to db.transaction needs to be called.
-    // db.transaction expects a callback that it will execute.
-    const transactionFn = db.transaction(reviewTransaction);
-
-    try {
-      transactionFn(); // Execute the transaction
-      // If transaction succeeded, fetch and return the updated report view
+      await client.query('COMMIT');
       return this.reportQueryService.getReportById(reportId);
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error(`Report review transaction failed for report ${reportId}:`, error);
       throw error;
+    } finally {
+      client.release();
     }
   }
-
-  // Extracted private methods (can be further refined or kept within reviewReport if simple enough)
-  // For now, the logic is kept inline in reviewReport for directness as per original service structure.
-  // If these become complex, they can be extracted:
-  // private handleDepartureApproval(...) {}
-  // private updateVesselInitialRobs(...) {}
 }
