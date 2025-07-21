@@ -110,6 +110,65 @@ The `src/routes` directory defines the API endpoints. It maps HTTP requests to t
 
 The routing is well-structured and follows RESTful conventions.
 
+### 2.9. Testing Setup
+
+The project includes a comprehensive testing setup built around Jest and TypeScript, with a focus on regulatory compliance and calculation accuracy.
+
+#### 2.9.1. Test Framework & Configuration
+
+- **Framework**: Jest with `ts-jest` preset for TypeScript support
+- **Environment**: Node.js test environment
+- **Timeout**: 30 seconds for integration tests that may hit the database
+- **Coverage**: Configurable coverage collection with strict thresholds for critical modules
+
+#### 2.9.2. Test Scripts
+
+- `npm test`: Run all tests
+- `npm run test:watch`: Run tests in watch mode during development
+- `npm run test:coverage`: Generate coverage reports (HTML, LCOV, and text formats)
+- `npm run test:calc`: Run only calculation-specific tests
+
+#### 2.9.3. Test Structure
+
+The tests are organized into two main categories:
+
+**Unit Tests** (`tests/unit/`):
+- Focus on calculation modules critical for MRV regulatory compliance
+- High coverage requirements (90-100% for calculation functions)
+- Include comprehensive edge case testing (null values, zero division, boundary conditions)
+- Located primarily in `tests/unit/calculations/`
+
+**Integration Tests** (`tests/integration/`):
+- Test complete voyage workflows and data flow between modules
+- Validate end-to-end report submission and processing scenarios
+- Test real-world data patterns and dependencies
+
+#### 2.9.4. Coverage Requirements
+
+The system enforces strict coverage thresholds, especially for calculation modules:
+
+- **Global minimum**: 80% across all metrics (branches, functions, lines, statements)
+- **Bunker Calculator**: 95% coverage (100% function coverage required)
+- **Distance Calculator**: 95% coverage (100% function coverage required)
+- **Cargo Calculator**: 90% coverage (95% function coverage required)
+
+These high standards ensure accuracy in calculations subject to regulatory oversight.
+
+#### 2.9.5. Test Infrastructure
+
+- **Setup File** (`tests/setup.ts`): Global test configuration, console mocking, and custom matchers
+- **Fixtures** (`tests/fixtures/`): Centralized test data including mock vessels, reports, and edge cases
+- **Mocks** (`tests/mocks/`): Database connection mocks to ensure isolated unit testing
+- **Custom Matchers**: `toBeCloseToNumber()` for floating-point calculation comparisons
+
+#### 2.9.6. Key Features
+
+- **Regulatory Focus**: All calculation tests ensure MRV compliance accuracy
+- **Database Isolation**: Unit tests use mocked database connections for speed and reliability
+- **Edge Case Coverage**: Comprehensive testing of error conditions and boundary values
+- **Real-world Scenarios**: Integration tests simulate complete voyage workflows
+- **Automated Mocking**: Console methods are mocked to reduce test output noise
+
 ## 3. Frontend
 
 The `frontend` directory contains a single-page application (SPA) built with React.

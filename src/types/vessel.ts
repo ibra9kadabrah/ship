@@ -7,11 +7,11 @@ export interface Vessel {
     deadweight: number;
     captainId: string;
     // Initial ROBs
-    initialRobLsifo?: number;
-    initialRobLsmgo?: number;
-    initialRobCylOil?: number;
-    initialRobMeOil?: number;
-    initialRobAeOil?: number;
+    initialRobLsifo?: number | null;
+    initialRobLsmgo?: number | null;
+    initialRobCylOil?: number | null;
+    initialRobMeOil?: number | null;
+    initialRobAeOil?: number | null;
     createdAt: Date;
     updatedAt: Date;
     isActive: boolean;
